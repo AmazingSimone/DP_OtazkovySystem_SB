@@ -471,13 +471,13 @@ const MainLayout = ({ children }) => {
           </Link>
         </LogoContainer>
 
-        <Stack justifyContent="space-between" direction="column" flexGrow={2}>
-          <List component="nav" sx={{ overflow: 'hidden' }}>
+        <Stack justifyContent="space-between" direction="column" flexGrow={2} sx={{ overflow: 'hidden' }}>
+          <List component="nav" dense sx={{ overflow: 'hidden' }}>
             <Box
               sx={{
-                px: 2,
+                px: 1.5,
                 mt: 'auto',
-                mb: 2,
+                mb: 1,
                 transition: `all ${animationDuration} ${customEasing}`,
                 willChange: 'transform, opacity',
                 transform: 'translateZ(0)'
@@ -561,7 +561,7 @@ const MainLayout = ({ children }) => {
 
           {/* Admin section at the bottom */}
           {adminOptions.length > 0 && (
-            <List component="nav" sx={{ overflow: 'hidden', mt: 'auto' }}>
+            <List component="nav" dense sx={{ overflow: 'hidden', mt: 'auto' }}>
               {adminOptions.map((item, index) => {
                 if (item.isHeader) {
                   return (
@@ -617,7 +617,7 @@ const MainLayout = ({ children }) => {
           <Box
             sx={{
               px: drawerCollapsed ? 1 : 2,
-              py: 2,
+              py: 1,
               borderTop: '1px solid',
               borderColor: 'divider',
               transition: `all ${animationDuration} ${customEasing}`
