@@ -10,6 +10,7 @@ import SubjectDetail from './pages/admin/subjects/SubjectDetail';
 import Subjects from './pages/admin/subjects/Subjects';
 import AllUsersQuestions from './pages/all-users-questions/AllUsersQuestions';
 import ResetPassword from './pages/auth/reset-password';
+import CalendarPage from './pages/calendar/CalendarPage';
 import Forum from './pages/forum/Forum';
 import MyQuestions from './pages/my-questions/MyQuestions';
 import Projects from './pages/projects/Projects';
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
       { path: '/my-questions', element: <MyQuestions /> },
       { path: '/all-users-questions', element: <AllUsersQuestions /> },
       { path: '/forum', element: <Forum /> },
+      { path: '/calendar', element: <CalendarPage /> },
       { path: '/subjects', element: <Subjects /> },
       { path: '/subjects/:subjectId', element: <SubjectDetail /> },
       { path: '/projects', element: <Projects /> },

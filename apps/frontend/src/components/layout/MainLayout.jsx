@@ -7,6 +7,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import AvTimerIcon from '@mui/icons-material/AvTimer';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -299,6 +300,9 @@ const MainLayout = ({ children }) => {
   }
 
   drawerOption = drawerOption.concat([{ title: 'Testy', navTo: '/tests', icon: <AvTimerIcon /> }]);
+  drawerOption = drawerOption.concat([
+    { title: 'Kalendár', navTo: '/calendar', icon: <CalendarMonthIcon /> }
+  ]);
 
   // Admin section - ONLY for teachers (not for user.isAdmin)
   if (teacher) {
