@@ -1,5 +1,6 @@
 import * as authService from '@app/pages/auth/authService';
 import { useGetTeacherMeQuery } from '@app/redux/api';
+import { joiResolver } from '@hookform/resolvers/joi';
 import {
   Alert,
   Box,
@@ -14,11 +15,12 @@ import {
   Grid,
   TextField
 } from '@mui/material';
-
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
 import { useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { calendarEventSchema } from '../calendarEvent.schema';
 
 const createInitialFormData = () => {
   const today = dayjs();
@@ -38,8 +40,6 @@ const createInitialFormData = () => {
 };
 
 const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
-  const [formData, setFormData] = useState(createInitialFormData);
-
   const storedUser = authService.getUserFromStorage();
   const isTeacherFromStorage = storedUser?.isTeacher === true;
 
@@ -50,87 +50,85 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const {
+    control,
+    handleSubmit: handleValidatedSubmit,
+    formState: { errors, isSubmitted, isValid },
+    reset,
+    setValue,
+    getValues,
+    trigger,
+    watch
+  } = useForm({
+    resolver: joiResolver(calendarEventSchema),
+    mode: 'onChange',
+    defaultValues: createInitialFormData()
+  });
+
+  const allDay = watch('allDay');
+  const selectedDate = watch('date');
 
   const handleStartTimeChange = (value) => {
-    setFormData((prev) => ({
-      ...prev,
-      startTime: value,
-      endTime: value ? dayjs(value).add(1, 'hour') : null
-    }));
-  };
-
-  const handleAllDayChange = (checked) => {
-    setFormData((prev) => {
-      if (!checked) {
-        return {
-          ...prev,
-          allDay: false
-        };
-      }
-
-      const today = dayjs();
-      const startDate = prev.date || today;
-      const endDate = prev.endDate || startDate;
-
-      return {
-        ...prev,
-        allDay: true,
-        date: startDate,
-        endDate
-      };
+    setValue('startTime', value, { shouldDirty: true, shouldValidate: true });
+    setValue('endTime', value ? dayjs(value).add(1, 'hour') : null, {
+      shouldDirty: true,
+      shouldValidate: true
     });
   };
 
-  const isFormValid = () => {
-    return (
-      formData.title.trim() !== '' &&
-      formData.date !== null &&
-      (!formData.allDay || formData.endDate !== null) &&
-      (formData.allDay
-        ? !dayjs(formData.endDate).isBefore(dayjs(formData.date), 'day')
-        : formData.startTime !== null && formData.endTime !== null)
-    );
+  const handleAllDayChange = (checked) => {
+    setValue('allDay', checked, { shouldDirty: true, shouldValidate: true });
+
+    if (!checked) {
+      trigger(['date', 'startTime', 'endTime']);
+      return;
+    }
+
+    const today = dayjs();
+    const startDate = getValues('date') || today;
+    const endDate = getValues('endDate') || startDate;
+
+    setValue('date', startDate, { shouldDirty: true, shouldValidate: true });
+    setValue('endDate', endDate, { shouldDirty: true, shouldValidate: true });
+    trigger(['date', 'endDate']);
   };
 
-  const handleSubmit = async () => {
+  const submitCalendarEvent = async (data) => {
+    setSubmitAttempted(true);
     setIsSubmitting(true);
     setError(null);
 
     try {
       const eventData = {
-        title: formData.title,
-        date: formData.date,
-        endDate: formData.endDate,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        allDay: formData.allDay,
-        studentGroup: formData.studentGroup,
-        location: formData.location,
-        description: formData.description,
-        color: formData.color,
+        title: data.title.trim(),
+        date: data.date,
+        endDate: data.endDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        allDay: data.allDay,
+        studentGroup: data.studentGroup?.trim() || '',
+        location: data.location?.trim() || '',
+        description: data.description?.trim() || '',
+        color: data.color,
         createdBy: teacherData?._id
       };
 
-      onEventCreated(eventData);
+      await onEventCreated(eventData);
       handleClose();
     } catch (err) {
       console.error(err);
-      setError('Nepodarilo sa vytvoriť event.');
+      setError(err?.message || 'Nepodarilo sa vytvoriť event.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    setFormData(createInitialFormData());
-
+    reset(createInitialFormData());
     setError(null);
+    setSubmitAttempted(false);
     onClose();
   };
 
@@ -167,152 +165,276 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           overflowY: 'visible'
         }}
       >
-        <TextField
-          label="Názov eventu"
-          value={formData.title}
-          onChange={(e) => handleInputChange('title', e.target.value)}
-          required
-          fullWidth
-        />
-
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={formData.allDay}
-              onChange={(e) => handleAllDayChange(e.target.checked)}
+        <Controller
+          name="title"
+          control={control}
+          rules={{
+            validate: (value) => (value?.trim() ? true : 'Nazov eventu je povinny')
+          }}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Názov eventu"
+              required
+              fullWidth
+              error={(submitAttempted || isSubmitted) && !!errors.title}
+              helperText={(submitAttempted || isSubmitted) && errors.title?.message}
             />
-          }
-          label="Celodenný event"
+          )}
         />
 
-        {formData.allDay ? (
+        <Controller
+          name="allDay"
+          control={control}
+          render={({ field }) => (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={field.value}
+                  onChange={(e) => handleAllDayChange(e.target.checked)}
+                />
+              }
+              label="Celodenný event"
+            />
+          )}
+        />
+
+        {allDay ? (
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <DatePicker
-                label="Dátum od"
-                value={formData.date}
-                onChange={(newValue) => {
-                  handleInputChange('date', newValue);
+              <Controller
+                name="date"
+                control={control}
+                rules={{
+                  validate: (value) => (isValidDayjs(value) ? true : 'Datum eventu je povinny')
+                }}
+                render={({ field }) => (
+                  <DatePicker
+                    label="Dátum od"
+                    value={field.value}
+                    onChange={(newValue) => {
+                      field.onChange(newValue);
 
-                  if (
-                    newValue &&
-                    formData.endDate &&
-                    dayjs(formData.endDate).isBefore(dayjs(newValue), 'day')
-                  ) {
-                    handleInputChange('endDate', newValue);
-                  }
-                }}
-                format="DD.MM.YYYY"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true
-                  }
-                }}
+                      const currentEndDate = getValues('endDate');
+
+                      if (
+                        newValue &&
+                        currentEndDate &&
+                        dayjs(currentEndDate).isBefore(dayjs(newValue), 'day')
+                      ) {
+                        setValue('endDate', newValue, { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
+                    format="DD.MM.YYYY"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true,
+                        error: (submitAttempted || isSubmitted) && !!errors.date,
+                        helperText: (submitAttempted || isSubmitted) && errors.date?.message
+                      }
+                    }}
+                  />
+                )}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <DatePicker
-                label="Dátum do"
-                value={formData.endDate}
-                onChange={(newValue) => handleInputChange('endDate', newValue)}
-                minDate={formData.date || undefined}
-                format="DD.MM.YYYY"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true
+              <Controller
+                name="endDate"
+                control={control}
+                rules={{
+                  validate: (value) => {
+                    if (!allDay) {
+                      return true;
+                    }
+
+                    if (!isValidDayjs(value)) {
+                      return 'Datum do je povinny';
+                    }
+
+                    const startDate = getValues('date');
+
+                    if (isValidDayjs(startDate) && dayjs(value).isBefore(dayjs(startDate), 'day')) {
+                      return 'Datum do musi byt rovnaky alebo neskorsi ako datum od';
+                    }
+
+                    return true;
                   }
                 }}
+                render={({ field }) => (
+                  <DatePicker
+                    label="Dátum do"
+                    value={field.value}
+                    onChange={field.onChange}
+                    minDate={selectedDate || undefined}
+                    format="DD.MM.YYYY"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true,
+                        error: (submitAttempted || isSubmitted) && !!errors.endDate,
+                        helperText: (submitAttempted || isSubmitted) && errors.endDate?.message
+                      }
+                    }}
+                  />
+                )}
               />
             </Grid>
           </Grid>
         ) : (
           <>
-            <DatePicker
-              label="Dátum eventu"
-              value={formData.date}
-              onChange={(newValue) => handleInputChange('date', newValue)}
-              format="DD.MM.YYYY"
-              slotProps={{
-                textField: {
-                  fullWidth: true,
-                  required: true
-                }
+            <Controller
+              name="date"
+              control={control}
+              rules={{
+                validate: (value) => (isValidDayjs(value) ? true : 'Datum eventu je povinny')
               }}
+              render={({ field }) => (
+                <DatePicker
+                  label="Dátum eventu"
+                  value={field.value}
+                  onChange={field.onChange}
+                  format="DD.MM.YYYY"
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true,
+                      error: (submitAttempted || isSubmitted) && !!errors.date,
+                      helperText: (submitAttempted || isSubmitted) && errors.date?.message
+                    }
+                  }}
+                />
+              )}
             />
 
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
-                <TimePicker
-                  label="Začiatok"
-                  value={formData.startTime}
-                  onChange={handleStartTimeChange}
-                  ampm={false}
-                  format="HH:mm"
-                  slotProps={{
-                    textField: {
-                      fullWidth: true
+                <Controller
+                  name="startTime"
+                  control={control}
+                  rules={{
+                    validate: (value) => {
+                      if (allDay) {
+                        return true;
+                      }
+
+                      return isValidDayjs(value) ? true : 'Zaciatocny cas je povinny';
                     }
                   }}
+                  render={({ field }) => (
+                    <TimePicker
+                      label="Začiatok"
+                      value={field.value}
+                      onChange={handleStartTimeChange}
+                      ampm={false}
+                      format="HH:mm"
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: (submitAttempted || isSubmitted) && !!errors.startTime,
+                          helperText: (submitAttempted || isSubmitted) && errors.startTime?.message
+                        }
+                      }}
+                    />
+                  )}
                 />
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <TimePicker
-                  label="Koniec"
-                  value={formData.endTime}
-                  onChange={(newValue) => handleInputChange('endTime', newValue)}
-                  ampm={false}
-                  format="HH:mm"
-                  slotProps={{
-                    textField: {
-                      fullWidth: true
+                <Controller
+                  name="endTime"
+                  control={control}
+                  rules={{
+                    validate: (value) => {
+                      if (allDay) {
+                        return true;
+                      }
+
+                      if (!isValidDayjs(value)) {
+                        return 'Koncovy cas je povinny';
+                      }
+
+                      const startTime = getValues('startTime');
+
+                      if (isValidDayjs(startTime) && !dayjs(value).isAfter(dayjs(startTime))) {
+                        return 'Koncovy cas musi byt neskor ako zaciatocny cas';
+                      }
+
+                      return true;
                     }
                   }}
+                  render={({ field }) => (
+                    <TimePicker
+                      label="Koniec"
+                      value={field.value}
+                      onChange={field.onChange}
+                      ampm={false}
+                      format="HH:mm"
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: (submitAttempted || isSubmitted) && !!errors.endTime,
+                          helperText: (submitAttempted || isSubmitted) && errors.endTime?.message
+                        }
+                      }}
+                    />
+                  )}
                 />
               </Grid>
             </Grid>
           </>
         )}
 
-        <TextField
-          label="Študijná skupina"
-          value={formData.studentGroup}
-          onChange={(e) => handleInputChange('studentGroup', e.target.value)}
-          helperText="Neskôr bude napojené na databázu skupín"
-          fullWidth
+        <Controller
+          name="studentGroup"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Študijná skupina"
+              helperText="Neskôr bude napojené na databázu skupín"
+              fullWidth
+            />
+          )}
         />
 
-        <TextField
-          label="Miesto / lokácia"
-          value={formData.location}
-          onChange={(e) => handleInputChange('location', e.target.value)}
-          fullWidth
+        <Controller
+          name="location"
+          control={control}
+          render={({ field }) => <TextField {...field} label="Miesto / lokácia" fullWidth />}
         />
 
-        <TextField
-          label="Popis eventu"
-          value={formData.description}
-          onChange={(e) => handleInputChange('description', e.target.value)}
-          multiline
-          rows={3}
-          fullWidth
+        <Controller
+          name="description"
+          control={control}
+          render={({ field }) => (
+            <TextField {...field} label="Popis eventu" multiline rows={3} fullWidth />
+          )}
         />
 
         <Box>
-          <TextField
-            label="Farba eventu"
-            type="color"
-            value={formData.color}
-            onChange={(e) => handleInputChange('color', e.target.value)}
-            InputLabelProps={{
-              shrink: true
+          <Controller
+            name="color"
+            control={control}
+            rules={{
+              validate: (value) => (value ? true : 'Farba eventu je povinna')
             }}
-            sx={{
-              width: 180
-            }}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Farba eventu"
+                type="color"
+                InputLabelProps={{
+                  shrink: true
+                }}
+                sx={{
+                  width: 180
+                }}
+                error={(submitAttempted || isSubmitted) && !!errors.color}
+                helperText={(submitAttempted || isSubmitted) && errors.color?.message}
+              />
+            )}
           />
         </Box>
 
@@ -332,8 +454,8 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
 
         <Button
           variant="contained"
-          onClick={handleSubmit}
-          disabled={isSubmitting || isLoadingTeacher || !isFormValid()}
+          onClick={handleValidatedSubmit(submitCalendarEvent)}
+          disabled={isSubmitting || isLoadingTeacher || !isValid}
           startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
         >
           {isSubmitting ? 'Vytváram...' : 'Vytvoriť event'}
