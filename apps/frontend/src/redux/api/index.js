@@ -16,7 +16,7 @@ const baseQuery = fetchBaseQuery({
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Users', 'Subjects', 'Moduls', 'Questions', 'QuestionRatings', 'ForumQuestions', 'Comments', 'Tests', 'Points', 'Projects', 'ProjectRatings', 'PendingAssignments'],
+  tagTypes: ['Users', 'Subjects', 'Moduls', 'Questions', 'QuestionRatings', 'ForumQuestions', 'Comments', 'Tests', 'Points', 'Projects', 'ProjectRatings', 'PendingAssignments', 'CalendarEvents'],
   endpoints: (builder) => ({
     // USERS
     getUserMe: builder.query({
@@ -947,6 +947,58 @@ export const api = createApi({
       ]
     }),
 
+    // CALENDAR
+    getCalendarEvents: builder.query({
+      query: () => ({
+        url: '/calendar',
+        method: 'GET'
+      }),
+      providesTags: (result) => [
+        ...(result?.data || []).map(({ _id, id }) => ({ type: 'CalendarEvents', id: _id || id })),
+        'CalendarEvents'
+      ]
+    }),
+    getMyCalendarEvents: builder.query({
+      query: () => ({
+        url: '/calendar/my-events',
+        method: 'GET'
+      }),
+      providesTags: (result) => [
+        ...(result?.data || []).map(({ _id, id }) => ({ type: 'CalendarEvents', id: _id || id })),
+        'CalendarEvents'
+      ]
+    }),
+    getCalendarEventById: builder.query({
+      query: (id) => ({
+        url: `/calendar/${id}`,
+        method: 'GET'
+      }),
+      providesTags: (result, error, arg) => [{ type: 'CalendarEvents', id: arg }]
+    }),
+    createCalendarEvent: builder.mutation({
+      query: (data) => ({
+        url: '/calendar',
+        method: 'POST',
+        body: data
+      }),
+      invalidatesTags: ['CalendarEvents']
+    }),
+    updateCalendarEvent: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/calendar/${id}`,
+        method: 'PUT',
+        body: data
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'CalendarEvents', id }, 'CalendarEvents']
+    }),
+    deleteCalendarEvent: builder.mutation({
+      query: (id) => ({
+        url: `/calendar/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['CalendarEvents']
+    }),
+
     // TEACHER VALIDATED QUESTIONS FOR TESTS
     getValidatedQuestionsForTest: builder.query({
       query: (testId) => ({
@@ -1286,6 +1338,16 @@ export const {
   useLazyGetValidatedQuestionsCountQuery,
   useAddQuestionToTestPoolMutation,
   useRemoveQuestionFromTestPoolMutation,
+  // CALENDAR
+  useGetCalendarEventsQuery,
+  useLazyGetCalendarEventsQuery,
+  useGetMyCalendarEventsQuery,
+  useLazyGetMyCalendarEventsQuery,
+  useGetCalendarEventByIdQuery,
+  useLazyGetCalendarEventByIdQuery,
+  useCreateCalendarEventMutation,
+  useUpdateCalendarEventMutation,
+  useDeleteCalendarEventMutation,
   // POINTS
   useGetUserPointsQuery,
   useLazyGetUserPointsQuery,

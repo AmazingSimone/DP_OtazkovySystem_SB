@@ -44,6 +44,7 @@ app.use("/subject", require("./src/routes/subject"));
 app.use("/modul", require("./src/routes/modul"));
 app.use("/question", require("./src/routes/question"));
 app.use("/test", require("./src/routes/test"));
+app.use("/calendar", require("./src/routes/calendar"));
 app.use("/teacher-validated-questions", require("./src/routes/teacherValidatedQuestion"));
 app.use("/project", require("./src/routes/project"));
 app.use("/point", require("./src/routes/point"));
