@@ -1,489 +1,290 @@
-import { useCurrentSubject } from '@app/hooks/useCurrentSubject';
-import { useCurrentSubjectId } from '@app/hooks/useCurrentSubjectId';
 import * as authService from '@app/pages/auth/authService';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import listPlugin from '@fullcalendar/list';
-import FullCalendar from '@fullcalendar/react';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import AddIcon from '@mui/icons-material/Add';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  FormControl,
-  FormControlLabel,
-  Grid,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-  Typography
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import React from 'react';
-import { toast } from 'react-toastify';
-
-const CalendarFrame = styled(Paper)(({ theme }) => ({
-  overflow: 'hidden',
-  borderRadius: 20,
-  border: `1px solid ${theme.palette.divider}`,
-  '& .fc': {
-    '--fc-border-color': theme.palette.divider,
-    '--fc-page-bg-color': 'transparent',
-    '--fc-neutral-bg-color': theme.palette.action.hover,
-    '--fc-list-event-hover-bg-color': theme.palette.action.hover,
-    '--fc-today-bg-color':
-      theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(25, 118, 210, 0.06)',
-    '--fc-event-border-color': 'transparent',
-    fontFamily: theme.typography.fontFamily
+import EventCalendar from '@fullcalendar/mui/monarch/EventCalendar';
+import '@fullcalendar/mui/monarch/theme.css';
+import skLocale from '@fullcalendar/react/locales/sk';
+import '@fullcalendar/react/skeleton.css';
+import { Box, Typography } from '@mui/material';
+import { darken, lighten, useTheme } from '@mui/material/styles';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { skSK } from '@mui/x-date-pickers/locales';
+import dayjs from 'dayjs';
+import 'dayjs/locale/sk';
+import { useState } from 'react';
+import CalendarEventDetailModal from './components/CalendarEventDetailModal';
+import CreateCalendarEventModal from './components/CreateCalendarEventModal';
+const initialEvents = [
+  {
+    id: 'event-1',
+    title: 'Osobná poznámka',
+    start: '2026-10-10T09:00:00',
+    end: '2026-10-10T10:00:00',
+    color: '#f59e0b'
   },
-  '& .fc-toolbar-title': {
-    fontSize: '1.1rem',
-    fontWeight: 700,
-    color: theme.palette.text.primary
+  {
+    id: 'event-2',
+    title: 'Skupinový termín',
+    start: '2026-10-12',
+    end: '2026-10-12',
+    allDay: true,
+    color: '#7c3aed'
   },
-  '& .fc .fc-button': {
-    borderRadius: 10,
-    textTransform: 'none'
-  },
-  '& .fc .fc-daygrid-day-number, & .fc .fc-col-header-cell-cushion, & .fc .fc-list-day-text, & .fc .fc-list-day-side-text':
-    {
-      color: theme.palette.text.primary,
-      textDecoration: 'none'
-    },
-  '& .fc .fc-event': {
-    border: 'none',
-    borderRadius: 10,
-    padding: '2px 4px',
-    cursor: 'pointer'
+  {
+    id: 'event-3',
+    title: 'Test 3 dni',
+    start: '2026-10-12',
+    end: '2026-10-15',
+    allDay: true,
+    color: '#155039'
   }
-}));
+];
 
-const createId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+const getHoverSurfaceColor = (color, mode, isAllDay) => {
+  if (!color) {
+    return color;
   }
 
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (mode === 'dark') {
+    return lighten(color, isAllDay ? 0.08 : 0.12);
+  }
+
+  return darken(color, isAllDay ? 0.06 : 0.12);
 };
 
-const formatLocalInputValue = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  const pad = (number) => String(number).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+const getHoverBorderColor = (color, mode, isAllDay) => {
+  if (!color) {
+    return color;
+  }
+
+  if (mode === 'dark') {
+    return lighten(color, isAllDay ? 0.14 : 0.2);
+  }
+
+  return darken(color, isAllDay ? 0.1 : 0.18);
 };
 
-const formatIso = (value) => {
-  if (!value) return '';
-  return new Date(value).toISOString();
+const attachCalendarEventHover = (info, mode) => {
+  const { el, event } = info;
+  const isAllDay = event.allDay === true;
+  const computedStyles = window.getComputedStyle(el);
+  const baseBackground = event.backgroundColor || computedStyles.backgroundColor;
+  const baseBorder = event.borderColor || computedStyles.borderColor || baseBackground;
+  const hoverBackground = getHoverSurfaceColor(baseBackground, mode, isAllDay);
+  const hoverBorder = getHoverBorderColor(baseBorder, mode, isAllDay);
+
+  el.style.setProperty(
+    'transition',
+    'background-color 0.16s ease, border-color 0.16s ease',
+    'important'
+  );
+
+  const handleMouseEnter = () => {
+    el.style.setProperty('background-color', hoverBackground, 'important');
+    el.style.setProperty('border-color', hoverBorder, 'important');
+    el.style.setProperty('opacity', '1', 'important');
+    el.style.setProperty('filter', 'none', 'important');
+  };
+
+  const handleMouseLeave = () => {
+    el.style.setProperty('background-color', baseBackground, 'important');
+    el.style.setProperty('border-color', baseBorder, 'important');
+    el.style.setProperty('opacity', '1', 'important');
+    el.style.removeProperty('filter');
+  };
+
+  el.addEventListener('mouseenter', handleMouseEnter);
+  el.addEventListener('mouseleave', handleMouseLeave);
+  el.__calendarHoverCleanup = () => {
+    el.removeEventListener('mouseenter', handleMouseEnter);
+    el.removeEventListener('mouseleave', handleMouseLeave);
+  };
 };
 
-const getUserId = () => {
-  const storedUser = authService.getUserFromStorage();
-  return storedUser?.id || storedUser?._id || storedUser?.userId || storedUser?.teacherId || null;
-};
-
-const buildSeedEvents = (userId) => {
-  const personalStart = new Date();
-  personalStart.setHours(9, 0, 0, 0);
-  const personalEnd = new Date(personalStart);
-  personalEnd.setHours(10, 0, 0, 0);
-
-  const groupStart = new Date();
-  groupStart.setDate(groupStart.getDate() + 2);
-  groupStart.setHours(0, 0, 0, 0);
-
-  return [
-    {
-      id: createId(),
-      title: 'Osobná poznámka',
-      start: personalStart.toISOString(),
-      end: personalEnd.toISOString(),
-      allDay: false,
-      description: 'Ukážkový osobný event.',
-      visibility: 'personal',
-      subjectId: null,
-      createdBy: userId
-    },
-    {
-      id: createId(),
-      title: 'Skupinový termín',
-      start: groupStart.toISOString(),
-      end: null,
-      allDay: true,
-      description: 'Ukážkový event pre aktuálny predmet.',
-      visibility: 'group',
-      subjectId: 'sample-subject',
-      createdBy: 'teacher-user'
-    }
-  ];
+const detachCalendarEventHover = (info) => {
+  info.el.__calendarHoverCleanup?.();
+  delete info.el.__calendarHoverCleanup;
 };
 
 const CalendarPage = () => {
-  const calendarRef = React.useRef(null);
-  const currentSubject = useCurrentSubject();
-  const currentSubjectId = useCurrentSubjectId();
+  const [openCreateEventModal, setOpenCreateEventModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [events, setEvents] = useState(initialEvents);
+  const theme = useTheme();
+  const storedTeacher = authService.getTeacherFromStorage();
   const storedUser = authService.getUserFromStorage();
-  const userId = getUserId();
-  const isTeacher = storedUser?.isTeacher === true;
+  const currentUserId =
+    storedTeacher?._id || storedTeacher?.id || storedUser?._id || storedUser?.id;
 
-  const [events, setEvents] = React.useState(() => buildSeedEvents(userId));
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [selectedEventId, setSelectedEventId] = React.useState(null);
-  const [formValue, setFormValue] = React.useState({
-    title: '',
-    description: '',
-    start: '',
-    end: '',
-    allDay: false,
-    visibility: 'personal'
-  });
+  const buildCalendarEvent = (eventData, existingId) => {
+    const eventDate = dayjs(eventData.date);
+    const eventId = existingId || `event-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 
-  const visibleEvents = React.useMemo(() => {
-    return events
-      .filter((event) => {
-        if (event.visibility === 'personal') {
-          return event.createdBy === userId;
+    if (eventData.allDay) {
+      return {
+        id: eventId,
+        title: eventData.title,
+        start: eventDate.format('YYYY-MM-DD'),
+        end: eventDate.add(1, 'day').format('YYYY-MM-DD'),
+        allDay: true,
+        color: eventData.color,
+        extendedProps: {
+          studentGroup: eventData.studentGroup,
+          location: eventData.location,
+          description: eventData.description,
+          createdBy: eventData.createdBy
         }
-
-        return Boolean(currentSubjectId) && event.subjectId === currentSubjectId;
-      })
-      .map((event) => ({
-        ...event,
-        editable: event.visibility === 'personal' ? event.createdBy === userId : isTeacher,
-        backgroundColor: event.visibility === 'personal' ? '#1976d2' : '#9c27b0',
-        borderColor: event.visibility === 'personal' ? '#1976d2' : '#9c27b0'
-      }));
-  }, [events, currentSubjectId, isTeacher, userId]);
-
-  const selectedEvent = React.useMemo(() => {
-    return events.find((event) => event.id === selectedEventId) || null;
-  }, [events, selectedEventId]);
-
-  const canManageSelectedEvent = React.useMemo(() => {
-    if (!selectedEvent) return false;
-    if (selectedEvent.visibility === 'personal') {
-      return selectedEvent.createdBy === userId;
+      };
     }
 
-    return isTeacher;
-  }, [isTeacher, selectedEvent, userId]);
+    const startTime = dayjs(eventData.startTime);
+    const endTime = dayjs(eventData.endTime);
 
-  const isReadOnlyDialog = Boolean(selectedEventId) && !canManageSelectedEvent;
-
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-    setSelectedEventId(null);
-  };
-
-  const openCreateDialog = (start = null, end = null, allDay = false) => {
-    setSelectedEventId(null);
-    setFormValue({
-      title: '',
-      description: '',
-      start: start ? formatLocalInputValue(start) : '',
-      end: end ? formatLocalInputValue(end) : '',
-      allDay,
-      visibility: isTeacher ? 'personal' : 'personal'
-    });
-    setDialogOpen(true);
-  };
-
-  const handleEventClick = (clickInfo) => {
-    const event = events.find((item) => item.id === clickInfo.event.id);
-    if (!event) return;
-
-    setSelectedEventId(event.id);
-    setFormValue({
-      title: event.title || '',
-      description: event.description || '',
-      start: formatLocalInputValue(event.start),
-      end: event.end ? formatLocalInputValue(event.end) : '',
-      allDay: Boolean(event.allDay),
-      visibility: event.visibility || 'personal'
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSelect = (selectInfo) => {
-    openCreateDialog(selectInfo.start, selectInfo.end, selectInfo.allDay);
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-
-    if (!formValue.title.trim()) {
-      toast.error('Názov eventu je povinný');
-      return;
-    }
-
-    const id = selectedEventId || createId();
-    const nextEvent = {
-      id,
-      title: formValue.title.trim(),
-      description: formValue.description.trim(),
-      start: formValue.start ? formatIso(formValue.start) : new Date().toISOString(),
-      end: formValue.end ? formatIso(formValue.end) : null,
-      allDay: formValue.allDay,
-      visibility: isTeacher && formValue.visibility === 'group' ? 'group' : 'personal',
-      subjectId: isTeacher && formValue.visibility === 'group' ? currentSubjectId || null : null,
-      createdBy: selectedEvent?.createdBy || userId
+    return {
+      id: eventId,
+      title: eventData.title,
+      start: eventDate
+        .hour(startTime.hour())
+        .minute(startTime.minute())
+        .second(0)
+        .format('YYYY-MM-DDTHH:mm:ss'),
+      end: eventDate
+        .hour(endTime.hour())
+        .minute(endTime.minute())
+        .second(0)
+        .format('YYYY-MM-DDTHH:mm:ss'),
+      allDay: false,
+      color: eventData.color,
+      extendedProps: {
+        studentGroup: eventData.studentGroup,
+        location: eventData.location,
+        description: eventData.description,
+        createdBy: eventData.createdBy
+      }
     };
+  };
 
-    setEvents((currentEvents) => {
-      const nextEvents = currentEvents.filter((item) => item.id !== id);
-      nextEvents.unshift(nextEvent);
-      return nextEvents;
+  const handleEventDidMount = (info) => {
+    attachCalendarEventHover(info, theme.palette.mode);
+  };
+
+  const handleEventClick = (info) => {
+    setSelectedEvent({
+      id: info.event.id,
+      title: info.event.title,
+      start: info.event.start,
+      end: info.event.end,
+      allDay: info.event.allDay,
+      color: info.event.backgroundColor,
+      backgroundColor: info.event.backgroundColor,
+      extendedProps: info.event.extendedProps || {}
     });
-
-    toast.success(selectedEventId ? 'Event bol upravený' : 'Event bol vytvorený');
-    handleCloseDialog();
   };
 
-  const handleDelete = () => {
-    if (!selectedEvent || !canManageSelectedEvent) return;
+  const handleEventUpdate = (eventData) => {
+    const updatedCalendarEvent = buildCalendarEvent(eventData, eventData.id);
 
-    setEvents((currentEvents) => currentEvents.filter((item) => item.id !== selectedEvent.id));
-    toast.success('Event bol vymazaný');
-    handleCloseDialog();
+    setEvents((prev) =>
+      prev.map((eventItem) =>
+        String(eventItem.id) === String(updatedCalendarEvent.id) ? updatedCalendarEvent : eventItem
+      )
+    );
+
+    setSelectedEvent({
+      id: updatedCalendarEvent.id,
+      title: updatedCalendarEvent.title,
+      start: updatedCalendarEvent.start,
+      end: updatedCalendarEvent.end,
+      allDay: updatedCalendarEvent.allDay,
+      color: updatedCalendarEvent.color,
+      backgroundColor: updatedCalendarEvent.color,
+      extendedProps: updatedCalendarEvent.extendedProps
+    });
   };
 
-  const handleToday = () => {
-    calendarRef.current?.getApi()?.today();
-  };
-
-  const handlePrev = () => {
-    calendarRef.current?.getApi()?.prev();
-  };
-
-  const handleNext = () => {
-    calendarRef.current?.getApi()?.next();
-  };
+  const canEditSelectedEvent =
+    !!selectedEvent?.extendedProps?.createdBy &&
+    !!currentUserId &&
+    String(selectedEvent.extendedProps.createdBy) === String(currentUserId);
 
   return (
-    <Box sx={{ pt: { xs: 2, sm: 3 }, pb: 3, px: { xs: 1, sm: 0 } }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        spacing={2}
-        sx={{ mb: 3 }}
+    <Box
+      sx={{
+        pt: { xs: 2, sm: 3 },
+        pb: 3,
+        px: { xs: 1, sm: 0 }
+      }}
+    >
+      <LocalizationProvider
+        dateAdapter={AdapterDayjs}
+        adapterLocale="sk"
+        localeText={skSK.components.MuiLocalizationProvider.defaultProps.localeText}
       >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Kalendár
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {currentSubject
-              ? `Aktuálny predmet: ${currentSubject.name}`
-              : 'Zvolený predmet ešte nie je dostupný.'}
-          </Typography>
-        </Box>
+        <CreateCalendarEventModal
+          open={openCreateEventModal}
+          onClose={() => setOpenCreateEventModal(false)}
+          onEventCreated={(event) => {
+            const calendarEvent = buildCalendarEvent(event);
 
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button variant="outlined" startIcon={<TodayOutlinedIcon />} onClick={handleToday}>
-            Today
-          </Button>
-          <Button variant="outlined" startIcon={<ChevronLeftIcon />} onClick={handlePrev}>
-            Predošlý
-          </Button>
-          <Button variant="outlined" endIcon={<ChevronRightIcon />} onClick={handleNext}>
-            Nasledujúci
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => openCreateDialog(new Date(), null, false)}
-          >
-            Nový event
-          </Button>
-        </Stack>
-      </Stack>
+            setEvents((prev) => [...prev, calendarEvent]);
+          }}
+        />
 
-      <Card sx={{ mb: 2, borderRadius: 3 }}>
-        <CardContent sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Chip label="Osobné eventy" color="primary" variant="outlined" />
-          <Chip label="Skupinové eventy" color="secondary" variant="outlined" />
-          <Chip
-            label={
-              isTeacher ? 'Teacher/admin vie tvoriť group eventy' : 'Group eventy sú read-only'
+        <CalendarEventDetailModal
+          open={selectedEvent !== null}
+          eventData={selectedEvent}
+          canEdit={canEditSelectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onSave={handleEventUpdate}
+        />
+      </LocalizationProvider>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        gap={{ xs: 1.5, sm: 1 }}
+        mb={3}
+      >
+        <Typography variant="h4" component="h1">
+          Kalendár
+        </Typography>
+      </Box>
+
+      <Box>
+        <EventCalendar
+          height="auto"
+          aspectRatio={2.4}
+          locale="sk"
+          locales={[skLocale]}
+          availableViews={['dayGridMonth', 'dayGridWeek', 'listWeek']}
+          editable
+          selectable
+          nowIndicator
+          navLinks
+          buttonText={{
+            today: 'Dnes',
+            month: 'Mesiac',
+            week: 'Týždeň',
+            list: 'Zoznam'
+          }}
+          eventTimeFormat={{
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }}
+          eventDidMount={handleEventDidMount}
+          eventWillUnmount={detachCalendarEventHover}
+          eventClick={handleEventClick}
+          events={events}
+          addButton={{
+            text: 'Pridať event',
+            click() {
+              // alert('add event...');
+              setOpenCreateEventModal(true);
             }
-            variant="outlined"
-          />
-        </CardContent>
-      </Card>
-
-      <CalendarFrame>
-        <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-            initialView="month"
-            views={{
-              month: { type: 'dayGridMonth', buttonText: 'Month' },
-              week: { type: 'timeGridWeek', buttonText: 'Week' },
-              day: { type: 'timeGridDay', buttonText: 'Day' },
-              list: { type: 'listWeek', buttonText: 'List' }
-            }}
-            headerToolbar={{
-              left: 'title',
-              center: '',
-              right: 'month,week,day,list'
-            }}
-            events={visibleEvents}
-            editable
-            selectable
-            selectMirror
-            dayMaxEvents
-            weekends
-            height="auto"
-            select={handleSelect}
-            eventClick={handleEventClick}
-            eventDisplay="block"
-            nowIndicator
-            stickyHeaderDates
-            eventContent={(arg) => (
-              <Stack spacing={0.25} sx={{ overflow: 'hidden' }}>
-                <Typography variant="caption" sx={{ lineHeight: 1, opacity: 0.85 }}>
-                  {arg.event.extendedProps.visibility === 'group' ? 'Skupina' : 'Osobné'}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.15 }} noWrap>
-                  {arg.event.title}
-                </Typography>
-              </Stack>
-            )}
-          />
-        </Box>
-      </CalendarFrame>
-
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-        <DialogTitle>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            {selectedEventId ? 'Upraviť event' : 'Nový event'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {formValue.visibility === 'group'
-              ? 'Event bude viditeľný pre používateľov aktuálneho predmetu.'
-              : 'Event uvidíte iba vy.'}
-          </Typography>
-        </DialogTitle>
-        <Divider />
-        <Box component="form" onSubmit={handleSubmit}>
-          <DialogContent sx={{ pt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  label="Názov"
-                  fullWidth
-                  required
-                  value={formValue.title}
-                  disabled={isReadOnlyDialog}
-                  onChange={(event) =>
-                    setFormValue((current) => ({ ...current, title: event.target.value }))
-                  }
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Popis"
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  value={formValue.description}
-                  disabled={isReadOnlyDialog}
-                  onChange={(event) =>
-                    setFormValue((current) => ({ ...current, description: event.target.value }))
-                  }
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Začiatok"
-                  type="datetime-local"
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  value={formValue.start}
-                  disabled={isReadOnlyDialog}
-                  onChange={(event) =>
-                    setFormValue((current) => ({ ...current, start: event.target.value }))
-                  }
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Koniec"
-                  type="datetime-local"
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  value={formValue.end}
-                  disabled={isReadOnlyDialog}
-                  onChange={(event) =>
-                    setFormValue((current) => ({ ...current, end: event.target.value }))
-                  }
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formValue.allDay}
-                      disabled={isReadOnlyDialog}
-                      onChange={(event) =>
-                        setFormValue((current) => ({ ...current, allDay: event.target.checked }))
-                      }
-                    />
-                  }
-                  label="All day"
-                />
-              </Grid>
-              {isTeacher && (
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <Select
-                      value={formValue.visibility}
-                      disabled={isReadOnlyDialog}
-                      onChange={(event) =>
-                        setFormValue((current) => ({ ...current, visibility: event.target.value }))
-                      }
-                    >
-                      <MenuItem value="personal">Osobný</MenuItem>
-                      <MenuItem value="group">Skupinový</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-            </Grid>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            {selectedEventId && canManageSelectedEvent && (
-              <Button color="error" startIcon={<DeleteOutlineIcon />} onClick={handleDelete}>
-                Vymazať
-              </Button>
-            )}
-            <Box sx={{ flexGrow: 1 }} />
-            <Button onClick={handleCloseDialog}>Zrušiť</Button>
-            {!isReadOnlyDialog && (
-              <Button type="submit" variant="contained">
-                Uložiť
-              </Button>
-            )}
-          </DialogActions>
-        </Box>
-      </Dialog>
+          }}
+        />
+      </Box>
     </Box>
   );
 };
