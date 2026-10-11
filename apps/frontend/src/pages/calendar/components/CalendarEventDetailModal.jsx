@@ -35,6 +35,14 @@ const mapEventToFormData = (eventData) => ({
   id: eventData?.id || null,
   title: eventData?.title || '',
   date: eventData?.start ? dayjs(eventData.start) : null,
+  endDate:
+    eventData?.allDay === true
+      ? eventData?.end
+        ? dayjs(eventData.end).subtract(1, 'day')
+        : eventData?.start
+          ? dayjs(eventData.start)
+          : null
+      : null,
   startTime: eventData?.start ? dayjs(eventData.start) : null,
   endTime: eventData?.end ? dayjs(eventData.end) : null,
   allDay: eventData?.allDay === true,
@@ -64,12 +72,44 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
     }));
   };
 
+  const handleStartTimeChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      startTime: value,
+      endTime: value ? dayjs(value).add(1, 'hour') : null
+    }));
+  };
+
+  const handleAllDayChange = (checked) => {
+    setFormData((prev) => {
+      if (!checked) {
+        return {
+          ...prev,
+          allDay: false
+        };
+      }
+
+      const today = dayjs();
+      const startDate = prev.date || today;
+      const endDate = prev.endDate || startDate;
+
+      return {
+        ...prev,
+        allDay: true,
+        date: startDate,
+        endDate
+      };
+    });
+  };
+
   const isFormValid = () => {
     return (
       formData.title.trim() !== '' &&
       formData.date !== null &&
-      formData.location.trim() !== '' &&
-      (formData.allDay || (formData.startTime !== null && formData.endTime !== null))
+      (!formData.allDay || formData.endDate !== null) &&
+      (formData.allDay
+        ? !dayjs(formData.endDate).isBefore(dayjs(formData.date), 'day')
+        : formData.startTime !== null && formData.endTime !== null)
     );
   };
 
@@ -78,6 +118,7 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
       id: formData.id,
       title: formData.title,
       date: formData.date,
+      endDate: formData.endDate,
       startTime: formData.startTime,
       endTime: formData.endTime,
       allDay: formData.allDay,
@@ -139,36 +180,81 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
               fullWidth
             />
 
-            <DatePicker
-              label="Dátum eventu"
-              value={formData.date}
-              onChange={(newValue) => handleInputChange('date', newValue)}
-              format="DD.MM.YYYY"
-              slotProps={{
-                textField: {
-                  fullWidth: true,
-                  required: true
-                }
-              }}
-            />
-
             <FormControlLabel
               control={
                 <Checkbox
                   checked={formData.allDay}
-                  onChange={(e) => handleInputChange('allDay', e.target.checked)}
+                  onChange={(e) => handleAllDayChange(e.target.checked)}
                 />
               }
               label="Celodenný event"
             />
 
-            {!formData.allDay && (
+            {formData.allDay ? (
               <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <DatePicker
+                    label="Dátum od"
+                    value={formData.date}
+                    onChange={(newValue) => {
+                      handleInputChange('date', newValue);
+
+                      if (
+                        newValue &&
+                        formData.endDate &&
+                        dayjs(formData.endDate).isBefore(dayjs(newValue), 'day')
+                      ) {
+                        handleInputChange('endDate', newValue);
+                      }
+                    }}
+                    format="DD.MM.YYYY"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <DatePicker
+                    label="Dátum do"
+                    value={formData.endDate}
+                    onChange={(newValue) => handleInputChange('endDate', newValue)}
+                    minDate={formData.date || undefined}
+                    format="DD.MM.YYYY"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </Grid>
+              </Grid>
+            ) : (
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <DatePicker
+                    label="Dátum eventu"
+                    value={formData.date}
+                    onChange={(newValue) => handleInputChange('date', newValue)}
+                    format="DD.MM.YYYY"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </Grid>
+
                 <Grid item xs={12} md={6}>
                   <TimePicker
                     label="Začiatok"
                     value={formData.startTime}
-                    onChange={(newValue) => handleInputChange('startTime', newValue)}
+                    onChange={handleStartTimeChange}
                     ampm={false}
                     format="HH:mm"
                     slotProps={{
@@ -228,12 +314,36 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
               InputProps={{ readOnly: true }}
             />
 
-            <TextField
-              label="Dátum eventu"
-              value={formatDateValue(eventData?.start)}
-              fullWidth
-              InputProps={{ readOnly: true }}
-            />
+            {isAllDay ? (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                  gap: 2
+                }}
+              >
+                <TextField
+                  label="Dátum od"
+                  value={formatDateValue(eventData?.start)}
+                  fullWidth
+                  InputProps={{ readOnly: true }}
+                />
+
+                <TextField
+                  label="Dátum do"
+                  value={formatDateValue(endDate || eventData?.start)}
+                  fullWidth
+                  InputProps={{ readOnly: true }}
+                />
+              </Box>
+            ) : (
+              <TextField
+                label="Dátum eventu"
+                value={formatDateValue(eventData?.start)}
+                fullWidth
+                InputProps={{ readOnly: true }}
+              />
+            )}
 
             {!isAllDay && (
               <Box
@@ -257,15 +367,6 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
                   InputProps={{ readOnly: true }}
                 />
               </Box>
-            )}
-
-            {isAllDay && endDate && dayjs(endDate).isAfter(dayjs(eventData?.start), 'day') && (
-              <TextField
-                label="Posledný deň eventu"
-                value={formatDateValue(endDate)}
-                fullWidth
-                InputProps={{ readOnly: true }}
-              />
             )}
 
             <TextField
@@ -335,7 +436,6 @@ CalendarEventDetailModal.propTypes = {
     start: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.object]),
     end: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.object]),
     allDay: PropTypes.bool,
-    color: PropTypes.string,
     backgroundColor: PropTypes.string,
     extendedProps: PropTypes.shape({
       createdBy: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

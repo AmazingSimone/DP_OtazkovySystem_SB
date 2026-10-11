@@ -16,13 +16,17 @@ import {
 } from '@mui/material';
 
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
+import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
 import { useState } from 'react';
 
-const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
-  const [formData, setFormData] = useState({
+const createInitialFormData = () => {
+  const today = dayjs();
+
+  return {
     title: '',
-    date: null,
+    date: today,
+    endDate: today,
     startTime: null,
     endTime: null,
     allDay: false,
@@ -30,7 +34,11 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
     location: '',
     description: '',
     color: '#1976d2'
-  });
+  };
+};
+
+const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
+  const [formData, setFormData] = useState(createInitialFormData);
 
   const storedUser = authService.getUserFromStorage();
   const isTeacherFromStorage = storedUser?.isTeacher === true;
@@ -49,12 +57,44 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
     }));
   };
 
+  const handleStartTimeChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      startTime: value,
+      endTime: value ? dayjs(value).add(1, 'hour') : null
+    }));
+  };
+
+  const handleAllDayChange = (checked) => {
+    setFormData((prev) => {
+      if (!checked) {
+        return {
+          ...prev,
+          allDay: false
+        };
+      }
+
+      const today = dayjs();
+      const startDate = prev.date || today;
+      const endDate = prev.endDate || startDate;
+
+      return {
+        ...prev,
+        allDay: true,
+        date: startDate,
+        endDate
+      };
+    });
+  };
+
   const isFormValid = () => {
     return (
       formData.title.trim() !== '' &&
       formData.date !== null &&
-      formData.location.trim() !== '' &&
-      (formData.allDay || (formData.startTime !== null && formData.endTime !== null))
+      (!formData.allDay || formData.endDate !== null) &&
+      (formData.allDay
+        ? !dayjs(formData.endDate).isBefore(dayjs(formData.date), 'day')
+        : formData.startTime !== null && formData.endTime !== null)
     );
   };
 
@@ -66,6 +106,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
       const eventData = {
         title: formData.title,
         date: formData.date,
+        endDate: formData.endDate,
         startTime: formData.startTime,
         endTime: formData.endTime,
         allDay: formData.allDay,
@@ -87,17 +128,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   };
 
   const handleClose = () => {
-    setFormData({
-      title: '',
-      date: null,
-      startTime: null,
-      endTime: null,
-      allDay: false,
-      studentGroup: '',
-      location: '',
-      description: '',
-      color: '#1976d2'
-    });
+    setFormData(createInitialFormData());
 
     setError(null);
     onClose();
@@ -144,61 +175,106 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           fullWidth
         />
 
-        <DatePicker
-          label="Dátum eventu"
-          value={formData.date}
-          onChange={(newValue) => handleInputChange('date', newValue)}
-          format="DD.MM.YYYY"
-          slotProps={{
-            textField: {
-              fullWidth: true,
-              required: true
-            }
-          }}
-        />
-
         <FormControlLabel
           control={
             <Checkbox
               checked={formData.allDay}
-              onChange={(e) => handleInputChange('allDay', e.target.checked)}
+              onChange={(e) => handleAllDayChange(e.target.checked)}
             />
           }
           label="Celodenný event"
         />
 
-        {!formData.allDay && (
+        {formData.allDay ? (
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <TimePicker
-                label="Začiatok"
-                value={formData.startTime}
-                onChange={(newValue) => handleInputChange('startTime', newValue)}
-                ampm={false}
-                format="HH:mm"
+              <DatePicker
+                label="Dátum od"
+                value={formData.date}
+                onChange={(newValue) => {
+                  handleInputChange('date', newValue);
+
+                  if (
+                    newValue &&
+                    formData.endDate &&
+                    dayjs(formData.endDate).isBefore(dayjs(newValue), 'day')
+                  ) {
+                    handleInputChange('endDate', newValue);
+                  }
+                }}
+                format="DD.MM.YYYY"
                 slotProps={{
                   textField: {
-                    fullWidth: true
+                    fullWidth: true,
+                    required: true
                   }
                 }}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TimePicker
-                label="Koniec"
-                value={formData.endTime}
-                onChange={(newValue) => handleInputChange('endTime', newValue)}
-                ampm={false}
-                format="HH:mm"
+              <DatePicker
+                label="Dátum do"
+                value={formData.endDate}
+                onChange={(newValue) => handleInputChange('endDate', newValue)}
+                minDate={formData.date || undefined}
+                format="DD.MM.YYYY"
                 slotProps={{
                   textField: {
-                    fullWidth: true
+                    fullWidth: true,
+                    required: true
                   }
                 }}
               />
             </Grid>
           </Grid>
+        ) : (
+          <>
+            <DatePicker
+              label="Dátum eventu"
+              value={formData.date}
+              onChange={(newValue) => handleInputChange('date', newValue)}
+              format="DD.MM.YYYY"
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  required: true
+                }
+              }}
+            />
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TimePicker
+                  label="Začiatok"
+                  value={formData.startTime}
+                  onChange={handleStartTimeChange}
+                  ampm={false}
+                  format="HH:mm"
+                  slotProps={{
+                    textField: {
+                      fullWidth: true
+                    }
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TimePicker
+                  label="Koniec"
+                  value={formData.endTime}
+                  onChange={(newValue) => handleInputChange('endTime', newValue)}
+                  ampm={false}
+                  format="HH:mm"
+                  slotProps={{
+                    textField: {
+                      fullWidth: true
+                    }
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </>
         )}
 
         <TextField
