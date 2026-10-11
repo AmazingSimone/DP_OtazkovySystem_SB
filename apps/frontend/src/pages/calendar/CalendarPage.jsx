@@ -120,11 +120,13 @@ const CalendarPage = () => {
     const eventId = existingId || `event-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 
     if (eventData.allDay) {
+      const endDate = dayjs(eventData.endDate || eventData.date);
+
       return {
         id: eventId,
         title: eventData.title,
         start: eventDate.format('YYYY-MM-DD'),
-        end: eventDate.add(1, 'day').format('YYYY-MM-DD'),
+        end: endDate.add(1, 'day').format('YYYY-MM-DD'),
         allDay: true,
         color: eventData.color,
         extendedProps: {
