@@ -108,6 +108,7 @@ const mapApiEventToCalendarEvent = (event) => ({
   borderColor: event.color,
   extendedProps: {
     color: event.color,
+    isPrivate: event.isPrivate === true,
     studentGroup: Array.isArray(event.studentGroup) ? event.studentGroup : [],
     location: event.location || '',
     description: event.description || '',

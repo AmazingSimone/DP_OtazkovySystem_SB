@@ -77,6 +77,7 @@ const mapEventToFormData = (eventData) => ({
 
 const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, onDelete }) => {
   const isAllDay = eventData?.allDay === true;
+  const isPrivateEvent = eventData?.extendedProps?.isPrivate === true;
   const endDate =
     isAllDay && eventData?.end ? dayjs(eventData.end).subtract(1, 'day').toDate() : eventData?.end;
   const [isEditing, setIsEditing] = useState(false);
@@ -146,7 +147,11 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
         startTime: data.startTime,
         endTime: data.endTime,
         allDay: data.allDay,
-        studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
+        studentGroup: isPrivateEvent
+          ? []
+          : Array.isArray(data.studentGroup)
+            ? data.studentGroup
+            : [],
         location: data.location?.trim() || '',
         description: data.description?.trim() || '',
         color: data.color,
@@ -451,11 +456,13 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
               </Grid>
             )}
 
-            <Controller
-              name="studentGroup"
-              control={control}
-              render={({ field }) => <TextField {...field} label="Študijná skupina" fullWidth />}
-            />
+            {!isPrivateEvent && (
+              <Controller
+                name="studentGroup"
+                control={control}
+                render={({ field }) => <TextField {...field} label="Študijná skupina" fullWidth />}
+              />
+            )}
 
             <Controller
               name="location"
@@ -577,18 +584,20 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
               </Box>
             )}
 
-            <TextField
-              label="Študijné skupiny"
-              value={
-                Array.isArray(eventData?.extendedProps?.studentGroup)
-                  ? eventData?.extendedProps?.studentGroup.join(', ')
-                  : ''
-              }
-              variant="standard"
-              InputProps={{ readOnly: true }}
-              sx={detailFieldSx}
-              fullWidth
-            />
+            {!isPrivateEvent && (
+              <TextField
+                label="Študijné skupiny"
+                value={
+                  Array.isArray(eventData?.extendedProps?.studentGroup)
+                    ? eventData?.extendedProps?.studentGroup.join(', ')
+                    : ''
+                }
+                variant="standard"
+                InputProps={{ readOnly: true }}
+                sx={detailFieldSx}
+                fullWidth
+              />
+            )}
 
             <TextField
               label="Miesto / lokácia"

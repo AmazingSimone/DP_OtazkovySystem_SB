@@ -40,6 +40,10 @@ const CalendarEventSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    isPrivate: {
+      type: Boolean,
+      default: false
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Teacher',

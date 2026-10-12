@@ -46,6 +46,7 @@ const baseSchema = {
   studentGroup: Joi.array().items(Joi.string()).optional(),
   location: Joi.string().allow('').trim().optional(),
   description: Joi.string().allow('').trim().optional(),
+  isPrivate: Joi.boolean().optional(),
   color: Joi.string().trim().min(1).required().messages({
     'string.empty': 'Farba eventu je povinna',
     'any.required': 'Farba eventu je povinna'
@@ -80,6 +81,7 @@ const updateCalendarEventSchema = Joi.object({
   studentGroup: Joi.array().items(Joi.string()).optional(),
   location: Joi.string().allow('').trim(),
   description: Joi.string().allow('').trim(),
+  isPrivate: Joi.boolean(),
   color: Joi.string().trim().min(1).messages({
     'string.empty': 'Farba eventu nemoze byt prazdna'
   }),

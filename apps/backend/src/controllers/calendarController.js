@@ -1,19 +1,47 @@
 const CalendarEvent = require('../models/calendarEvent');
 const Teacher = require('../models/teacher');
+const User = require('../models/user');
 const { validate, validated } = require('../util/validation');
 const {
   createCalendarEventSchema,
   updateCalendarEventSchema
 } = require('../schemas/calendarEventRequest.schema');
 
-const isTeacherOwnerOrAdmin = async (userId, ownerId) => {
-  const teacher = await Teacher.findById(userId).select('isAdmin');
+const isEventOwnerOrAdmin = async (userId, ownerId) => {
+  const [teacher, user] = await Promise.all([
+    Teacher.findById(userId).select('isAdmin'),
+    User.findById(userId).select('isAdmin')
+  ]);
 
-  if (!teacher) {
+  const isAdmin = teacher?.isAdmin === true || user?.isAdmin === true;
+
+  return isAdmin || String(userId) === String(ownerId);
+};
+
+const canViewCalendarEvent = ({ event, userId, isTeacherOrAdmin, userGroupNumber }) => {
+  if (!event) {
     return false;
   }
 
-  return teacher.isAdmin || String(userId) === String(ownerId);
+  if (String(event.createdBy) === String(userId)) {
+    return true;
+  }
+
+  if (event.isPrivate) {
+    return false;
+  }
+
+  if (isTeacherOrAdmin) {
+    return true;
+  }
+
+  if (!userGroupNumber) {
+    return false;
+  }
+
+  return Array.isArray(event.studentGroup)
+    ? event.studentGroup.length === 0 || event.studentGroup.includes(userGroupNumber)
+    : false;
 };
 
 const startOfDay = (value) => {
@@ -111,16 +139,21 @@ const createCalendarEvent = [
   async (req, res) => {
     try {
       const data = validated(req);
-      const teacher = await Teacher.findById(req.user.user_id).select('_id');
+      const [teacher, user] = await Promise.all([
+        Teacher.findById(req.user.user_id).select('_id isAdmin'),
+        User.findById(req.user.user_id).select('_id isAdmin')
+      ]);
 
-      if (!teacher) {
+      if (!teacher && !user) {
         return res.status(403).json({
           success: false,
-          message: 'Only teachers can create calendar events'
+          message: 'Not allowed to create calendar events'
         });
       }
 
       const { start, end } = normalizeEventDates(data);
+      const isTeacherOrAdmin = teacher?.isAdmin === true || user?.isAdmin === true || !!teacher;
+      const isPrivate = data.isPrivate !== undefined ? data.isPrivate : !isTeacherOrAdmin;
 
       const calendarEvent = new CalendarEvent({
         title: data.title.trim(),
@@ -131,11 +164,11 @@ const createCalendarEvent = [
         studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
         location: data.location || '',
         description: data.description || '',
+        isPrivate,
         createdBy: req.user.user_id
       });
 
       await calendarEvent.save();
-      await calendarEvent.populate('createdBy', 'name surname email isAdmin');
 
       return res.status(201).json({
         success: true,
@@ -165,7 +198,7 @@ const updateCalendarEvent = [
         });
       }
 
-      const canEdit = await isTeacherOwnerOrAdmin(req.user.user_id, event.createdBy);
+      const canEdit = await isEventOwnerOrAdmin(req.user.user_id, event.createdBy);
 
       if (!canEdit) {
         return res.status(403).json({
@@ -193,9 +226,9 @@ const updateCalendarEvent = [
       if (data.studentGroup !== undefined) event.studentGroup = Array.isArray(data.studentGroup) ? data.studentGroup : [];
       if (data.location !== undefined) event.location = data.location || '';
       if (data.description !== undefined) event.description = data.description || '';
+      if (data.isPrivate !== undefined) event.isPrivate = data.isPrivate;
 
       await event.save();
-      await event.populate('createdBy', 'name surname email isAdmin');
 
       return res.status(200).json({
         success: true,
@@ -212,53 +245,31 @@ const updateCalendarEvent = [
 
 const getCalendarEvents = async (req, res) => {
   try {
-    const User = require('../models/user');
-    const Teacher = require('../models/teacher');
+    const [currentUser, currentTeacher] = await Promise.all([
+      User.findById(req.user.user_id).select('_id groupNumber isAdmin'),
+      Teacher.findById(req.user.user_id).select('_id isAdmin')
+    ]);
 
-    // Fetch current user to determine if they're a teacher or student
-    let currentUser = await User.findById(req.user.user_id);
-    let isTeacher = false;
-    let userGroupNumber = null;
+    const isTeacherOrAdmin = currentTeacher || currentUser?.isAdmin === true;
+    const userGroupNumber = currentUser?.groupNumber || null;
 
-    if (!currentUser) {
-      // User is a teacher
-      currentUser = await Teacher.findById(req.user.user_id);
-      isTeacher = true;
-    } else {
-      // User is a student
-      userGroupNumber = currentUser.groupNumber;
-    }
+    const query = {};
 
-    let query = {};
-
-    // Handle specific queries
     if (req.query.mine === 'true') {
       query.createdBy = req.user.user_id;
-    }
-
-    if (req.query.createdBy) {
-      query.createdBy = req.query.createdBy;
-    }
-
-    // If user is a student and no specific query filters are applied, filter by group
-    if (!isTeacher && !req.query.mine && !req.query.createdBy) {
-      // Students can only see events where:
-      // 1. studentGroup array is empty (visible to all), OR
-      // 2. their groupNumber is in the studentGroup array
+    } else if (isTeacherOrAdmin) {
+      query.$or = [{ isPrivate: { $ne: true } }, { createdBy: req.user.user_id }];
+    } else {
       query.$or = [
-        { studentGroup: { $size: 0 } },
-        { studentGroup: userGroupNumber }
-      ];
-    } else if (!isTeacher) {
-      // If other filters are applied but user is still a student, ensure they can only see their group
-      query.$or = [
-        { studentGroup: { $size: 0 } },
-        { studentGroup: userGroupNumber }
+        { createdBy: req.user.user_id },
+        {
+          isPrivate: { $ne: true },
+          $or: [{ studentGroup: { $size: 0 } }, { studentGroup: userGroupNumber }]
+        }
       ];
     }
 
     const events = await CalendarEvent.find(query)
-      .populate('createdBy', 'name surname email isAdmin')
       .sort({ start: 1, createdAt: 1 });
 
     return res.status(200).json({
@@ -276,9 +287,7 @@ const getCalendarEvents = async (req, res) => {
 
 const getMyCalendarEvents = async (req, res) => {
   try {
-    const events = await CalendarEvent.find({ createdBy: req.user.user_id })
-      .populate('createdBy', 'name surname email isAdmin')
-      .sort({ start: 1, createdAt: 1 });
+    const events = await CalendarEvent.find({ createdBy: req.user.user_id }).sort({ start: 1, createdAt: 1 });
 
     return res.status(200).json({
       success: true,
@@ -296,9 +305,31 @@ const getMyCalendarEvents = async (req, res) => {
 const getCalendarEventById = async (req, res) => {
   try {
     const { id } = req.params;
-    const event = await CalendarEvent.findById(id).populate('createdBy', 'name surname email isAdmin');
+    const event = await CalendarEvent.findById(id);
 
     if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Calendar event not found'
+      });
+    }
+
+    const [currentUser, currentTeacher] = await Promise.all([
+      User.findById(req.user.user_id).select('_id groupNumber isAdmin'),
+      Teacher.findById(req.user.user_id).select('_id isAdmin')
+    ]);
+
+    const isTeacherOrAdmin = currentTeacher || currentUser?.isAdmin === true;
+    const userGroupNumber = currentUser?.groupNumber || null;
+
+    if (
+      !canViewCalendarEvent({
+        event,
+        userId: req.user.user_id,
+        isTeacherOrAdmin,
+        userGroupNumber
+      })
+    ) {
       return res.status(404).json({
         success: false,
         message: 'Calendar event not found'
@@ -330,7 +361,7 @@ const deleteCalendarEvent = async (req, res) => {
       });
     }
 
-    const canDelete = await isTeacherOwnerOrAdmin(req.user.user_id, event.createdBy);
+    const canDelete = await isEventOwnerOrAdmin(req.user.user_id, event.createdBy);
 
     if (!canDelete) {
       return res.status(403).json({
