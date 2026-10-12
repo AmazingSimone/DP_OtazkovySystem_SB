@@ -37,6 +37,15 @@ const formatTimeValue = (value) => {
   return dayjs(value).format('HH:mm');
 };
 
+const detailFieldSx = {
+  '& .MuiInputBase-root': {
+    pointerEvents: 'none'
+  },
+  '& .MuiInputBase-input': {
+    cursor: 'default'
+  }
+};
+
 const mapEventToFormData = (eventData) => ({
   id: eventData?.id || null,
   title: eventData?.title || '',
@@ -497,8 +506,10 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
             <TextField
               label="Názov eventu"
               value={eventData?.title || ''}
-              fullWidth
+              variant="standard"
               InputProps={{ readOnly: true }}
+              sx={detailFieldSx}
+              fullWidth
             />
 
             {isAllDay ? (
@@ -512,23 +523,29 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
                 <TextField
                   label="Dátum od"
                   value={formatDateValue(eventData?.start)}
-                  fullWidth
+                  variant="standard"
                   InputProps={{ readOnly: true }}
+                  sx={detailFieldSx}
+                  fullWidth
                 />
 
                 <TextField
                   label="Dátum do"
                   value={formatDateValue(endDate || eventData?.start)}
-                  fullWidth
+                  variant="standard"
                   InputProps={{ readOnly: true }}
+                  sx={detailFieldSx}
+                  fullWidth
                 />
               </Box>
             ) : (
               <TextField
                 label="Dátum eventu"
                 value={formatDateValue(eventData?.start)}
-                fullWidth
+                variant="standard"
                 InputProps={{ readOnly: true }}
+                sx={detailFieldSx}
+                fullWidth
               />
             )}
 
@@ -543,15 +560,19 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
                 <TextField
                   label="Začiatok"
                   value={formatTimeValue(eventData?.start)}
-                  fullWidth
+                  variant="standard"
                   InputProps={{ readOnly: true }}
+                  sx={detailFieldSx}
+                  fullWidth
                 />
 
                 <TextField
                   label="Koniec"
                   value={formatTimeValue(eventData?.end)}
-                  fullWidth
+                  variant="standard"
                   InputProps={{ readOnly: true }}
+                  sx={detailFieldSx}
+                  fullWidth
                 />
               </Box>
             )}
@@ -563,24 +584,30 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
                   ? eventData?.extendedProps?.studentGroup.join(', ')
                   : ''
               }
-              fullWidth
+              variant="standard"
               InputProps={{ readOnly: true }}
+              sx={detailFieldSx}
+              fullWidth
             />
 
             <TextField
               label="Miesto / lokácia"
               value={eventData?.extendedProps?.location || ''}
-              fullWidth
+              variant="standard"
               InputProps={{ readOnly: true }}
+              sx={detailFieldSx}
+              fullWidth
             />
 
             <TextField
               label="Popis eventu"
               value={eventData?.extendedProps?.description || ''}
+              variant="standard"
+              InputProps={{ readOnly: true }}
+              sx={detailFieldSx}
               multiline
               rows={3}
               fullWidth
-              InputProps={{ readOnly: true }}
             />
           </>
         )}
