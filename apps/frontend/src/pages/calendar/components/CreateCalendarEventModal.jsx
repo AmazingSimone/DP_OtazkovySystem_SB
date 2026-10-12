@@ -1,11 +1,13 @@
 import * as authService from '@app/pages/auth/authService';
-import { useGetTeacherMeQuery } from '@app/redux/api';
+import { useGetTeacherMeQuery, useGetUsersListQuery } from '@app/redux/api';
 import { joiResolver } from '@hookform/resolvers/joi';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -32,7 +34,7 @@ const createInitialFormData = () => {
     startTime: null,
     endTime: null,
     allDay: false,
-    studentGroup: '',
+    studentGroup: [],
     location: '',
     description: '',
     color: '#1976d2'
@@ -69,6 +71,18 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
 
   const allDay = watch('allDay');
   const selectedDate = watch('date');
+  const studentGroupValue = watch('studentGroup');
+
+  // Fetch all users to extract unique group numbers
+  const { data: usersData = [], isLoading: isLoadingUsers } = useGetUsersListQuery();
+
+  // Extract unique group numbers and sort them
+  const uniqueGroups = [
+    ...new Set(usersData.filter((user) => user.groupNumber).map((user) => user.groupNumber))
+  ].sort((a, b) => {
+    // Natural sort: "1A" < "2A" < "10A"
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
 
   const handleStartTimeChange = (value) => {
     setValue('startTime', value, { shouldDirty: true, shouldValidate: true });
@@ -108,7 +122,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
         startTime: data.startTime,
         endTime: data.endTime,
         allDay: data.allDay,
-        studentGroup: data.studentGroup?.trim() || '',
+        studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
         location: data.location?.trim() || '',
         description: data.description?.trim() || '',
         color: data.color,
@@ -390,11 +404,22 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           name="studentGroup"
           control={control}
           render={({ field }) => (
-            <TextField
-              {...field}
-              label="Študijná skupina"
-              helperText="Neskôr bude napojené na databázu skupín"
+            <Autocomplete
+              multiple
+              options={uniqueGroups}
+              value={studentGroupValue || []}
+              onChange={(event, newValue) => {
+                field.onChange(newValue || []);
+              }}
+              loading={isLoadingUsers}
+              renderInput={(params) => (
+                <TextField {...params} label="Študijné skupiny" placeholder="Vyberte skupiny" />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => <Chip label={option} {...getTagProps({ index })} />)
+              }
               fullWidth
+              noOptionsText="Žiadne študijné skupiny nie sú dostupné"
             />
           )}
         />
@@ -455,7 +480,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
         <Button
           variant="contained"
           onClick={handleValidatedSubmit(submitCalendarEvent)}
-          disabled={isSubmitting || isLoadingTeacher || !isValid}
+          disabled={isSubmitting || isLoadingTeacher || isLoadingUsers || !isValid}
           startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
         >
           {isSubmitting ? 'Vytváram...' : 'Vytvoriť event'}

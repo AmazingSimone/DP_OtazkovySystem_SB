@@ -27,9 +27,8 @@ const CalendarEventSchema = new mongoose.Schema(
       trim: true
     },
     studentGroup: {
-      type: String,
-      trim: true,
-      default: ''
+      type: [String],
+      default: []
     },
     location: {
       type: String,

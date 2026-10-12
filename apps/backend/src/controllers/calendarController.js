@@ -105,7 +105,7 @@ const createCalendarEvent = [
         end,
         allDay: data.allDay,
         color: data.color.trim(),
-        studentGroup: data.studentGroup || '',
+        studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
         location: data.location || '',
         description: data.description || '',
         createdBy: req.user.user_id
@@ -167,7 +167,7 @@ const updateCalendarEvent = [
       event.end = dates.end;
       if (data.allDay !== undefined) event.allDay = data.allDay;
       if (data.color !== undefined) event.color = data.color.trim();
-      if (data.studentGroup !== undefined) event.studentGroup = data.studentGroup || '';
+      if (data.studentGroup !== undefined) event.studentGroup = Array.isArray(data.studentGroup) ? data.studentGroup : [];
       if (data.location !== undefined) event.location = data.location || '';
       if (data.description !== undefined) event.description = data.description || '';
 

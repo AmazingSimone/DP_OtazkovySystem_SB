@@ -68,7 +68,7 @@ export const calendarEventSchema = Joi.object({
     otherwise: optionalDayjs
   }),
   allDay: Joi.boolean().required(),
-  studentGroup: Joi.string().allow('').optional(),
+  studentGroup: Joi.array().items(Joi.string()).optional(),
   location: Joi.string().allow('').optional(),
   description: Joi.string().allow('').optional(),
   createdBy: Joi.alternatives().try(Joi.string(), Joi.number()).allow(null).optional(),

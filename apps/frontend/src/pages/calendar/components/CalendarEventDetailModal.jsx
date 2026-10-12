@@ -50,7 +50,9 @@ const mapEventToFormData = (eventData) => ({
   startTime: eventData?.start ? dayjs(eventData.start) : null,
   endTime: eventData?.end ? dayjs(eventData.end) : null,
   allDay: eventData?.allDay === true,
-  studentGroup: eventData?.extendedProps?.studentGroup || '',
+  studentGroup: Array.isArray(eventData?.extendedProps?.studentGroup)
+    ? eventData?.extendedProps?.studentGroup
+    : [],
   location: eventData?.extendedProps?.location || '',
   description: eventData?.extendedProps?.description || '',
   color: eventData?.backgroundColor || eventData?.color || '#1976d2',
@@ -132,7 +134,7 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
         startTime: data.startTime,
         endTime: data.endTime,
         allDay: data.allDay,
-        studentGroup: data.studentGroup?.trim() || '',
+        studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
         location: data.location?.trim() || '',
         description: data.description?.trim() || '',
         color: data.color,
@@ -538,8 +540,12 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
             )}
 
             <TextField
-              label="Študijná skupina"
-              value={eventData?.extendedProps?.studentGroup || ''}
+              label="Študijné skupiny"
+              value={
+                Array.isArray(eventData?.extendedProps?.studentGroup)
+                  ? eventData?.extendedProps?.studentGroup.join(', ')
+                  : ''
+              }
               fullWidth
               InputProps={{ readOnly: true }}
             />
@@ -609,7 +615,7 @@ CalendarEventDetailModal.propTypes = {
     backgroundColor: PropTypes.string,
     extendedProps: PropTypes.shape({
       createdBy: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-      studentGroup: PropTypes.string,
+      studentGroup: PropTypes.arrayOf(PropTypes.string),
       location: PropTypes.string,
       description: PropTypes.string
     })

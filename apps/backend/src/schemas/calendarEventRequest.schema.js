@@ -43,7 +43,7 @@ const baseSchema = {
     'boolean.base': 'Celodenny event musi byt boolean',
     'any.required': 'Celodenny event je povinny'
   }),
-  studentGroup: Joi.string().allow('').trim().optional(),
+  studentGroup: Joi.array().items(Joi.string()).optional(),
   location: Joi.string().allow('').trim().optional(),
   description: Joi.string().allow('').trim().optional(),
   color: Joi.string().trim().min(1).required().messages({
@@ -77,7 +77,7 @@ const updateCalendarEventSchema = Joi.object({
   allDay: Joi.boolean().messages({
     'boolean.base': 'Celodenny event musi byt boolean'
   }),
-  studentGroup: Joi.string().allow('').trim(),
+  studentGroup: Joi.array().items(Joi.string()).optional(),
   location: Joi.string().allow('').trim(),
   description: Joi.string().allow('').trim(),
   color: Joi.string().trim().min(1).messages({

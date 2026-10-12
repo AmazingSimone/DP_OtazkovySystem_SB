@@ -106,7 +106,7 @@ const mapApiEventToCalendarEvent = (event) => ({
   backgroundColor: event.color,
   borderColor: event.color,
   extendedProps: {
-    studentGroup: event.studentGroup || '',
+    studentGroup: Array.isArray(event.studentGroup) ? event.studentGroup : [],
     location: event.location || '',
     description: event.description || '',
     createdBy: getCreatedById(event.createdBy)
@@ -120,7 +120,7 @@ const buildCalendarEventPayload = (eventData) => ({
   startTime: eventData.startTime,
   endTime: eventData.endTime,
   allDay: eventData.allDay,
-  studentGroup: eventData.studentGroup?.trim() || '',
+  studentGroup: Array.isArray(eventData.studentGroup) ? eventData.studentGroup : [],
   location: eventData.location?.trim() || '',
   description: eventData.description?.trim() || '',
   color: eventData.color
