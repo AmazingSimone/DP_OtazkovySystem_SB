@@ -41,9 +41,12 @@ const createInitialFormData = () => {
   };
 };
 
+const isValidDayjs = (value) => dayjs.isDayjs(value) && value.isValid();
+
 const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   const storedUser = authService.getUserFromStorage();
   const isTeacherFromStorage = storedUser?.isTeacher === true;
+  const canAssignStudentGroups = isTeacherFromStorage || storedUser?.isAdmin === true;
 
   const { data: teacherData, isLoading: isLoadingTeacher } = useGetTeacherMeQuery(undefined, {
     skip: !isTeacherFromStorage
@@ -74,7 +77,9 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   const studentGroupValue = watch('studentGroup');
 
   // Fetch all users to extract unique group numbers
-  const { data: usersData = [], isLoading: isLoadingUsers } = useGetUsersListQuery();
+  const { data: usersData = [], isLoading: isLoadingUsers } = useGetUsersListQuery(undefined, {
+    skip: !canAssignStudentGroups
+  });
 
   // Extract unique group numbers and sort them
   const uniqueGroups = [
@@ -109,26 +114,33 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
     trigger(['date', 'endDate']);
   };
 
+  const handleClose = () => {
+    reset(createInitialFormData());
+    setError(null);
+    setSubmitAttempted(false);
+    onClose();
+  };
+
   const submitCalendarEvent = async (data) => {
     setSubmitAttempted(true);
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const eventData = {
-        title: data.title.trim(),
-        date: data.date,
-        endDate: data.endDate,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        allDay: data.allDay,
-        studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
-        location: data.location?.trim() || '',
-        description: data.description?.trim() || '',
-        color: data.color,
-        createdBy: teacherData?._id
-      };
+    const eventData = {
+      title: data.title.trim(),
+      date: data.date,
+      endDate: data.endDate,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      allDay: data.allDay,
+      studentGroup: Array.isArray(data.studentGroup) ? data.studentGroup : [],
+      location: data.location?.trim() || '',
+      description: data.description?.trim() || '',
+      color: data.color,
+      createdBy: teacherData?._id
+    };
 
+    try {
       await onEventCreated(eventData);
       handleClose();
     } catch (err) {
@@ -137,13 +149,6 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleClose = () => {
-    reset(createInitialFormData());
-    setError(null);
-    setSubmitAttempted(false);
-    onClose();
   };
 
   return (
@@ -400,29 +405,31 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           </>
         )}
 
-        <Controller
-          name="studentGroup"
-          control={control}
-          render={({ field }) => (
-            <Autocomplete
-              multiple
-              options={uniqueGroups}
-              value={studentGroupValue || []}
-              onChange={(event, newValue) => {
-                field.onChange(newValue || []);
-              }}
-              loading={isLoadingUsers}
-              renderInput={(params) => (
-                <TextField {...params} label="Študijné skupiny" placeholder="Vyberte skupiny" />
-              )}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => <Chip label={option} {...getTagProps({ index })} />)
-              }
-              fullWidth
-              noOptionsText="Žiadne študijné skupiny nie sú dostupné"
-            />
-          )}
-        />
+        {canAssignStudentGroups && (
+          <Controller
+            name="studentGroup"
+            control={control}
+            render={({ field }) => (
+              <Autocomplete
+                multiple
+                options={uniqueGroups}
+                value={studentGroupValue || []}
+                onChange={(event, newValue) => {
+                  field.onChange(newValue || []);
+                }}
+                loading={isLoadingUsers}
+                renderInput={(params) => (
+                  <TextField {...params} label="Študijné skupiny" placeholder="Vyberte skupiny" />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => <Chip label={option} {...getTagProps({ index })} />)
+                }
+                fullWidth
+                noOptionsText="Žiadne študijné skupiny nie sú dostupné"
+              />
+            )}
+          />
+        )}
 
         <Controller
           name="location"
