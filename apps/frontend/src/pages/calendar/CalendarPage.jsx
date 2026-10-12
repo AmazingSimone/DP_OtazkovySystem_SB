@@ -107,6 +107,7 @@ const mapApiEventToCalendarEvent = (event) => ({
   backgroundColor: event.color,
   borderColor: event.color,
   extendedProps: {
+    color: event.color,
     studentGroup: Array.isArray(event.studentGroup) ? event.studentGroup : [],
     location: event.location || '',
     description: event.description || '',
@@ -164,7 +165,7 @@ const CalendarPage = () => {
       start: info.event.start,
       end: info.event.end,
       allDay: info.event.allDay,
-      color: info.event.backgroundColor,
+      color: info.event.extendedProps?.color || info.event.backgroundColor,
       backgroundColor: info.event.backgroundColor,
       extendedProps: info.event.extendedProps || {}
     });

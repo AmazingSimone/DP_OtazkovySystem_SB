@@ -57,7 +57,8 @@ const mapEventToFormData = (eventData) => ({
     : [],
   location: eventData?.extendedProps?.location || '',
   description: eventData?.extendedProps?.description || '',
-  color: eventData?.backgroundColor || eventData?.color || '#1976d2',
+  color:
+    eventData?.extendedProps?.color || eventData?.color || eventData?.backgroundColor || '#1976d2',
   createdBy:
     eventData?.extendedProps?.createdBy?._id ||
     eventData?.extendedProps?.createdBy?.id ||
