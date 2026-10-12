@@ -17,12 +17,34 @@ const isTeacherOwnerOrAdmin = async (userId, ownerId) => {
 };
 
 const startOfDay = (value) => {
-  const date = new Date(value);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  // Parse YYYY-MM-DD format or ISO string
+  let date;
+  if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Simple date string like "2026-10-21" - parse as UTC
+    date = new Date(value + 'T00:00:00.000Z');
+  } else {
+    // ISO string or Date object
+    date = new Date(value);
+    // Use local date components
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    date = new Date(year, month, day, 0, 0, 0, 0);
+  }
+  return date;
 };
 
 const subtractOneDay = (value) => {
-  const date = new Date(value);
+  let date;
+  if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    date = new Date(value + 'T00:00:00.000Z');
+  } else {
+    date = new Date(value);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    date = new Date(year, month, day, 0, 0, 0, 0);
+  }
   date.setDate(date.getDate() - 1);
   return date;
 };
@@ -53,8 +75,9 @@ const normalizeEventDates = (data) => {
       });
     }
 
+    // For all-day events, end date should be the day AFTER the last day
     const inclusiveEnd = new Date(endDate);
-    inclusiveEnd.setDate(inclusiveEnd.getDate() + 1);
+    inclusiveEnd.setUTCDate(inclusiveEnd.getUTCDate() + 1);
 
     return {
       start,
@@ -189,14 +212,49 @@ const updateCalendarEvent = [
 
 const getCalendarEvents = async (req, res) => {
   try {
-    const query = {};
+    const User = require('../models/user');
+    const Teacher = require('../models/teacher');
 
+    // Fetch current user to determine if they're a teacher or student
+    let currentUser = await User.findById(req.user.user_id);
+    let isTeacher = false;
+    let userGroupNumber = null;
+
+    if (!currentUser) {
+      // User is a teacher
+      currentUser = await Teacher.findById(req.user.user_id);
+      isTeacher = true;
+    } else {
+      // User is a student
+      userGroupNumber = currentUser.groupNumber;
+    }
+
+    let query = {};
+
+    // Handle specific queries
     if (req.query.mine === 'true') {
       query.createdBy = req.user.user_id;
     }
 
     if (req.query.createdBy) {
       query.createdBy = req.query.createdBy;
+    }
+
+    // If user is a student and no specific query filters are applied, filter by group
+    if (!isTeacher && !req.query.mine && !req.query.createdBy) {
+      // Students can only see events where:
+      // 1. studentGroup array is empty (visible to all), OR
+      // 2. their groupNumber is in the studentGroup array
+      query.$or = [
+        { studentGroup: { $size: 0 } },
+        { studentGroup: userGroupNumber }
+      ];
+    } else if (!isTeacher) {
+      // If other filters are applied but user is still a student, ensure they can only see their group
+      query.$or = [
+        { studentGroup: { $size: 0 } },
+        { studentGroup: userGroupNumber }
+      ];
     }
 
     const events = await CalendarEvent.find(query)

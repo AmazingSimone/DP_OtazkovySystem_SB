@@ -115,8 +115,8 @@ const mapApiEventToCalendarEvent = (event) => ({
 
 const buildCalendarEventPayload = (eventData) => ({
   title: eventData.title.trim(),
-  date: eventData.date,
-  endDate: eventData.endDate,
+  date: eventData.date ? eventData.date.format('YYYY-MM-DD') : null,
+  endDate: eventData.endDate ? eventData.endDate.format('YYYY-MM-DD') : null,
   startTime: eventData.startTime,
   endTime: eventData.endTime,
   allDay: eventData.allDay,
