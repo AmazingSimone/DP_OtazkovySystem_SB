@@ -1,4 +1,5 @@
 import { joiResolver } from '@hookform/resolvers/joi';
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
   Alert,
   Box,
@@ -10,6 +11,7 @@ import {
   DialogTitle,
   FormControlLabel,
   Grid,
+  IconButton,
   TextField
 } from '@mui/material';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
@@ -63,7 +65,7 @@ const mapEventToFormData = (eventData) => ({
     null
 });
 
-const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave }) => {
+const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, onDelete }) => {
   const isAllDay = eventData?.allDay === true;
   const endDate =
     isAllDay && eventData?.end ? dayjs(eventData.end).subtract(1, 'day').toDate() : eventData?.end;
@@ -160,6 +162,20 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
     reset(mapEventToFormData(eventData));
     setIsEditing(false);
     setSubmitAttempted(false);
+  };
+
+  const handleDelete = async () => {
+    if (!eventData?.id) {
+      return;
+    }
+
+    const shouldDelete = window.confirm('Naozaj chcete vymazať tento event?');
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    await onDelete(eventData.id);
   };
 
   return (
@@ -575,30 +591,44 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave })
         sx={{
           px: 3,
           pb: 3,
-          gap: 1
+          gap: 1,
+          justifyContent: 'space-between'
         }}
       >
-        {canEdit && !isEditing && (
-          <Button variant="outlined" onClick={() => setIsEditing(true)}>
-            Upraviť event
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+          <Button variant={isEditing ? 'text' : 'outlined'} color="error" onClick={handleClose}>
+            Zrušiť
           </Button>
-        )}
 
-        {canEdit && isEditing && (
-          <Button variant="outlined" color="inherit" onClick={handleCancelEdit}>
-            Zrušiť úpravu
-          </Button>
-        )}
+          {canEdit && !isEditing && (
+            <Button variant="contained" onClick={() => setIsEditing(true)}>
+              Upraviť event
+            </Button>
+          )}
 
-        {canEdit && isEditing && (
-          <Button variant="contained" onClick={handleSubmit(handleSave)} disabled={!isValid}>
-            Uložiť zmeny
-          </Button>
-        )}
+          {canEdit && isEditing && (
+            <IconButton
+              color="error"
+              onClick={handleDelete}
+              aria-label="Vymazať event"
+              title="Vymazať event"
+            >
+              <DeleteIcon />
+            </IconButton>
+          )}
 
-        <Button variant={isEditing ? 'text' : 'contained'} onClick={handleClose}>
-          Zavrieť
-        </Button>
+          {canEdit && isEditing && (
+            <Button variant="outlined" color="error" onClick={handleCancelEdit}>
+              Zrušiť úpravu
+            </Button>
+          )}
+
+          {canEdit && isEditing && (
+            <Button variant="contained" onClick={handleSubmit(handleSave)} disabled={!isValid}>
+              Uložiť zmeny
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   );
@@ -622,7 +652,8 @@ CalendarEventDetailModal.propTypes = {
   }),
   canEdit: PropTypes.bool,
   onClose: PropTypes.func.isRequired,
-  onSave: PropTypes.func.isRequired
+  onSave: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired
 };
 
 export default CalendarEventDetailModal;

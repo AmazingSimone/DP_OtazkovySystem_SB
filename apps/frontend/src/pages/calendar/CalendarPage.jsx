@@ -1,6 +1,7 @@
 import * as authService from '@app/pages/auth/authService';
 import {
   useCreateCalendarEventMutation,
+  useDeleteCalendarEventMutation,
   useGetCalendarEventsQuery,
   useUpdateCalendarEventMutation
 } from '@app/redux/api';
@@ -145,6 +146,7 @@ const CalendarPage = () => {
 
   const [createCalendarEvent] = useCreateCalendarEventMutation();
   const [updateCalendarEvent] = useUpdateCalendarEventMutation();
+  const [deleteCalendarEvent] = useDeleteCalendarEventMutation();
 
   const calendarEvents = useMemo(
     () => (calendarEventsResponse?.data || []).map(mapApiEventToCalendarEvent),
@@ -202,6 +204,13 @@ const CalendarPage = () => {
     setCalendarRenderKey((key) => key + 1);
   };
 
+  const handleEventDelete = async (eventId) => {
+    await deleteCalendarEvent(eventId).unwrap();
+    setSelectedEvent(null);
+    await refetchCalendarEvents();
+    setCalendarRenderKey((key) => key + 1);
+  };
+
   const canEditSelectedEvent =
     !!selectedEvent?.extendedProps?.createdBy &&
     !!currentUserId &&
@@ -232,6 +241,7 @@ const CalendarPage = () => {
           canEdit={canEditSelectedEvent}
           onClose={() => setSelectedEvent(null)}
           onSave={handleEventUpdate}
+          onDelete={handleEventDelete}
         />
       </LocalizationProvider>
       <Box
