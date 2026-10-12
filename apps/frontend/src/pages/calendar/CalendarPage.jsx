@@ -129,6 +129,7 @@ const buildCalendarEventPayload = (eventData) => ({
 const CalendarPage = () => {
   const [openCreateEventModal, setOpenCreateEventModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [calendarRenderKey, setCalendarRenderKey] = useState(0);
   const theme = useTheme();
   const storedTeacher = authService.getTeacherFromStorage();
   const storedUser = authService.getUserFromStorage();
@@ -138,7 +139,8 @@ const CalendarPage = () => {
   const {
     data: calendarEventsResponse,
     isLoading: isCalendarLoading,
-    isError: isCalendarError
+    isError: isCalendarError,
+    refetch: refetchCalendarEvents
   } = useGetCalendarEventsQuery();
 
   const [createCalendarEvent] = useCreateCalendarEventMutation();
@@ -170,6 +172,7 @@ const CalendarPage = () => {
     const payload = buildCalendarEventPayload(eventData);
 
     await createCalendarEvent(payload).unwrap();
+    setCalendarRenderKey((key) => key + 1);
   };
 
   const handleEventUpdate = async (eventData) => {
@@ -193,6 +196,10 @@ const CalendarPage = () => {
       borderColor: updatedEvent.borderColor,
       extendedProps: updatedEvent.extendedProps
     });
+
+    // Refetch calendar events to update the visual representation immediately
+    await refetchCalendarEvents();
+    setCalendarRenderKey((key) => key + 1);
   };
 
   const canEditSelectedEvent =
@@ -252,6 +259,7 @@ const CalendarPage = () => {
         ) : null}
 
         <EventCalendar
+          key={calendarRenderKey}
           height="auto"
           aspectRatio={2.4}
           locale="sk"
