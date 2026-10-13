@@ -968,6 +968,13 @@ export const api = createApi({
         'CalendarEvents'
       ]
     }),
+    exportCalendarIcs: builder.query({
+      query: () => ({
+        url: '/calendar/calendar.ics',
+        method: 'GET',
+        responseHandler: (response) => response.text()
+      })
+    }),
     getCalendarEventById: builder.query({
       query: (id) => ({
         url: `/calendar/${id}`,
@@ -1343,6 +1350,8 @@ export const {
   useLazyGetCalendarEventsQuery,
   useGetMyCalendarEventsQuery,
   useLazyGetMyCalendarEventsQuery,
+  useExportCalendarIcsQuery,
+  useLazyExportCalendarIcsQuery,
   useGetCalendarEventByIdQuery,
   useLazyGetCalendarEventByIdQuery,
   useCreateCalendarEventMutation,

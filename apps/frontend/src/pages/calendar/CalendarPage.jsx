@@ -2,6 +2,7 @@ import * as authService from '@app/pages/auth/authService';
 import {
   useCreateCalendarEventMutation,
   useDeleteCalendarEventMutation,
+  useLazyExportCalendarIcsQuery,
   useGetCalendarEventsQuery,
   useUpdateCalendarEventMutation
 } from '@app/redux/api';
@@ -9,7 +10,9 @@ import EventCalendar from '@fullcalendar/mui/monarch/EventCalendar';
 import '@fullcalendar/mui/monarch/theme.css';
 import skLocale from '@fullcalendar/react/locales/sk';
 import '@fullcalendar/react/skeleton.css';
+import DownloadIcon from '@mui/icons-material/Download';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import IconButton from '@mui/material/IconButton';
 import { darken, lighten, useTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -149,6 +152,7 @@ const CalendarPage = () => {
   const [createCalendarEvent] = useCreateCalendarEventMutation();
   const [updateCalendarEvent] = useUpdateCalendarEventMutation();
   const [deleteCalendarEvent] = useDeleteCalendarEventMutation();
+  const [exportCalendarIcs] = useLazyExportCalendarIcsQuery();
 
   const calendarEvents = useMemo(
     () => (calendarEventsResponse?.data || []).map(mapApiEventToCalendarEvent),
@@ -213,6 +217,27 @@ const CalendarPage = () => {
     setCalendarRenderKey((key) => key + 1);
   };
 
+  const handleDownloadMyEvents = async () => {
+    try {
+      const calendarIcs = await exportCalendarIcs().unwrap();
+      const url = window.URL.createObjectURL(
+        new Blob([calendarIcs], { type: 'text/calendar' })
+      );
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'calendar.ics';
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Nepodarilo sa stiahnuť kalendár:', error);
+    }
+  };
+
   const canEditSelectedEvent =
     !!selectedEvent?.extendedProps?.createdBy &&
     !!currentUserId &&
@@ -258,6 +283,14 @@ const CalendarPage = () => {
           Kalendár
         </Typography>
       </Box>
+
+      <IconButton
+        aria-label="Stiahnuť kalendár"
+        title="Stiahnuť kalendár"
+        onClick={handleDownloadMyEvents}
+      >
+        <DownloadIcon />
+      </IconButton>
 
       <Box>
         {isCalendarLoading ? (
