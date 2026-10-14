@@ -2,8 +2,8 @@ import * as authService from '@app/pages/auth/authService';
 import {
   useCreateCalendarEventMutation,
   useDeleteCalendarEventMutation,
-  useLazyExportCalendarIcsQuery,
   useGetCalendarEventsQuery,
+  useLazyExportCalendarIcsQuery,
   useUpdateCalendarEventMutation
 } from '@app/redux/api';
 import EventCalendar from '@fullcalendar/mui/monarch/EventCalendar';
@@ -220,9 +220,7 @@ const CalendarPage = () => {
   const handleDownloadMyEvents = async () => {
     try {
       const calendarIcs = await exportCalendarIcs().unwrap();
-      const url = window.URL.createObjectURL(
-        new Blob([calendarIcs], { type: 'text/calendar' })
-      );
+      const url = window.URL.createObjectURL(new Blob([calendarIcs], { type: 'text/calendar' }));
 
       const link = document.createElement('a');
       link.href = url;
@@ -282,15 +280,14 @@ const CalendarPage = () => {
         <Typography variant="h4" component="h1">
           Kalendár
         </Typography>
+        <IconButton
+          aria-label="Stiahnuť kalendár"
+          title="Stiahnuť kalendár"
+          onClick={handleDownloadMyEvents}
+        >
+          <DownloadIcon />
+        </IconButton>
       </Box>
-
-      <IconButton
-        aria-label="Stiahnuť kalendár"
-        title="Stiahnuť kalendár"
-        onClick={handleDownloadMyEvents}
-      >
-        <DownloadIcon />
-      </IconButton>
 
       <Box>
         {isCalendarLoading ? (
