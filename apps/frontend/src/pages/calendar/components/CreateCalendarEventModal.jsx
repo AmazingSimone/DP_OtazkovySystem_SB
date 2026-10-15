@@ -20,7 +20,7 @@ import {
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { calendarEventSchema } from '../calendarEvent.schema';
 
@@ -82,12 +82,20 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   });
 
   // Extract unique group numbers and sort them
-  const uniqueGroups = [
-    ...new Set(usersData.filter((user) => user.groupNumber).map((user) => user.groupNumber))
-  ].sort((a, b) => {
-    // Natural sort: "1A" < "2A" < "10A"
-    return a.localeCompare(b, undefined, { numeric: true });
-  });
+  const uniqueGroups = useMemo(() => {
+    return [
+      ...new Set(usersData.filter((user) => user.groupNumber).map((user) => user.groupNumber))
+    ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [usersData]);
+
+  const [groupsInitialized, setGroupsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!groupsInitialized && canAssignStudentGroups && uniqueGroups.length > 0) {
+      setValue('studentGroup', uniqueGroups);
+      setGroupsInitialized(true);
+    }
+  }, [groupsInitialized, canAssignStudentGroups, uniqueGroups, setValue]);
 
   const handleStartTimeChange = (value) => {
     setValue('startTime', value, { shouldDirty: true, shouldValidate: true });
@@ -115,7 +123,10 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
   };
 
   const handleClose = () => {
-    reset(createInitialFormData());
+    reset({
+      ...createInitialFormData(),
+      studentGroup: uniqueGroups
+    });
     setError(null);
     setSubmitAttempted(false);
     onClose();
@@ -413,7 +424,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
               <Autocomplete
                 multiple
                 options={uniqueGroups}
-                value={studentGroupValue || []}
+                value={field.value || []}
                 onChange={(event, newValue) => {
                   field.onChange(newValue || []);
                 }}
@@ -422,7 +433,11 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
                   <TextField {...params} label="Študijné skupiny" placeholder="Vyberte skupiny" />
                 )}
                 renderTags={(value, getTagProps) =>
-                  value.map((option, index) => <Chip label={option} {...getTagProps({ index })} />)
+                  value.map((option, index) => {
+                    const { key, ...chipProps } = getTagProps({ index });
+
+                    return <Chip key={key} label={option} {...chipProps} />;
+                  })
                 }
                 fullWidth
                 noOptionsText="Žiadne študijné skupiny nie sú dostupné"
