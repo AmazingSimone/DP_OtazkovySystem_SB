@@ -29,10 +29,12 @@ import ListItemText from '@mui/material/ListItemText';
 import { styled } from '@mui/material/styles';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import CalendarEventsDrawer from '@app/components/calendar/CalendarEventsDrawer';
+import { CalendarDrawerContext } from '@app/contexts/CalendarDrawerContext';
 import PropTypes from 'prop-types';
 import * as React from 'react';
 import { useDispatch } from 'react-redux';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeModeContext } from '../../contexts/ThemeModeContext';
 import ProfileMenu from './profile-menu.component';
 import TeamSwitcher from './TeamSwitcher';
@@ -175,6 +177,7 @@ const NavItem = styled(ListItemButton)(({ theme }) => ({
 
 const MainLayout = ({ children }) => {
   const matched = useMediaQuery('(min-width:900px)');
+  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { mode, toggleThemeMode } = React.useContext(ThemeModeContext);
@@ -196,6 +199,7 @@ const MainLayout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [isClosing, setIsClosing] = React.useState(false);
   const [profileMenuAnchorEl, setProfileAnchorEl] = React.useState(null);
+  const [calendarDrawerOpen, setCalendarDrawerOpen] = React.useState(false);
   const profileMenuOpen = Boolean(profileMenuAnchorEl);
 
   React.useEffect(() => {
@@ -314,6 +318,11 @@ const MainLayout = ({ children }) => {
   }
 
   const currentDrawerWidth = drawerCollapsed ? collapsedDrawerWidth : drawerWidth;
+  const showCalendarDrawer = location.pathname === '/' || location.pathname === '/teacher-dashboard';
+  const calendarDrawerContextValue = React.useMemo(
+    () => ({ open: calendarDrawerOpen }),
+    [calendarDrawerOpen]
+  );
 
   return (
     <Box sx={{ display: 'flex', width: '100vw', overflow: 'hidden' }}>
@@ -348,6 +357,18 @@ const MainLayout = ({ children }) => {
           <Typography component="h1" variant="h6" color="inherit" noWrap sx={{ flexGrow: 1 }}>
             Otázkový systém
           </Typography>
+          {showCalendarDrawer && (
+            <Tooltip title={calendarDrawerOpen ? 'Skryť kalendár' : 'Zobraziť kalendár'}>
+              <IconButton
+                color="inherit"
+                aria-label={calendarDrawerOpen ? 'Skryť kalendár' : 'Zobraziť kalendár'}
+                aria-pressed={calendarDrawerOpen}
+                onClick={() => setCalendarDrawerOpen((open) => !open)}
+              >
+                <CalendarMonthIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           <Button color="inherit" onClick={openProfileMenu} startIcon={<AccountCircleIcon />}>
             {matched &&
               (() => {
@@ -429,13 +450,17 @@ const MainLayout = ({ children }) => {
           flexGrow: 1,
           width: { md: `calc(100% - ${currentDrawerWidth}px)` },
           height: '100vh',
-          overflow: 'auto',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           willChange: 'margin, width'
         }}
       >
         <Toolbar />
         <Container maxWidth={false} sx={{ px: 0 }}>
-          {children}
+          <CalendarDrawerContext.Provider value={calendarDrawerContextValue}>
+            {children}
+            {showCalendarDrawer && <CalendarEventsDrawer />}
+          </CalendarDrawerContext.Provider>
         </Container>
       </SmoothBox>
     </Box>
