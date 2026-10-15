@@ -306,12 +306,13 @@ const CalendarPage = () => {
           aspectRatio={2.4}
           locale="sk"
           locales={[skLocale]}
-          availableViews={['dayGridMonth', 'dayGridWeek', 'listWeek']}
+          availableViews={['multiMonthYear', 'dayGridMonth', 'dayGridWeek', 'listWeek']}
           editable
           selectable
           nowIndicator
           navLinks
           buttonText={{
+            multiMonthYear: 'Rok',
             today: 'Dnes',
             month: 'Mesiac',
             week: 'Týždeň',
