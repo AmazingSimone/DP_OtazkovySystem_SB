@@ -14,7 +14,8 @@ services:
             context: ./apps/backend
             dockerfile: Dockerfile.dev
         depends_on:
-            - mongo
+            mongo:
+                condition: service_healthy
         volumes:
             - ./apps/backend/:/usr/src/app
             - /usr/src/app/.pnpm-store
@@ -46,6 +47,12 @@ services:
         image: 'mongo'
         command: mongod --auth --logpath /dev/null
         restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 10s
         environment:
             - MONGO_INITDB_DATABASE=otazkovySystem
             - MONGO_INITDB_ROOT_USERNAME=mongoUser
