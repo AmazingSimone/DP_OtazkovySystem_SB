@@ -969,8 +969,8 @@ export const api = createApi({
       ]
     }),
     exportCalendarIcs: builder.query({
-      query: () => ({
-        url: '/calendar/calendar.ics',
+      query: (userId) => ({
+        url: `/public/calendar/${userId}/calendar.ics`,
         method: 'GET',
         responseHandler: (response) => response.text()
       })

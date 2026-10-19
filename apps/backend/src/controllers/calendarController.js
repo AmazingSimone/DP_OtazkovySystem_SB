@@ -265,34 +265,45 @@ const updateCalendarEvent = [
   },
 ];
 
-const findCalendarEventsForUser = async (req) => {
+const findCalendarEventsForUser = async (userId, mine = false) => {
   const [currentUser, currentTeacher] = await Promise.all([
-    User.findById(req.user.user_id).select("_id groupNumber isAdmin"),
-    Teacher.findById(req.user.user_id).select("_id isAdmin"),
+    User.findById(userId).select("_id groupNumber isAdmin"),
+    Teacher.findById(userId).select("_id isAdmin"),
   ]);
 
-  const isTeacherOrAdmin =
-    Boolean(currentTeacher) || currentUser?.isAdmin === true;
+  // Používateľ nemusí existovať ani v jednej kolekcii.
+  if (!currentUser && !currentTeacher) {
+    return null;
+  }
 
-  const userGroupNumber = currentUser?.groupNumber || null;
+  let query;
 
-  const query = {};
-
-  if (req.query.mine === "true") {
-    query.createdBy = req.user.user_id;
-  } else if (isTeacherOrAdmin) {
-    query.$or = [{ isPrivate: { $ne: true } }, { createdBy: req.user.user_id }];
+  if (mine) {
+    query = { createdBy: userId };
   } else {
-    query.$or = [
-      { createdBy: req.user.user_id },
-      {
-        isPrivate: { $ne: true },
+    const isTeacherOrAdmin =
+      Boolean(currentTeacher) || currentUser?.isAdmin === true;
+
+    if (isTeacherOrAdmin) {
+      query = {
+        $or: [{ isPrivate: { $ne: true } }, { createdBy: userId }],
+      };
+    } else {
+      const userGroupNumber = currentUser?.groupNumber;
+
+      query = {
         $or: [
-          { studentGroup: { $size: 0 } },
-          { studentGroup: userGroupNumber },
+          { createdBy: userId },
+          {
+            isPrivate: { $ne: true },
+            $or: [
+              { studentGroup: { $size: 0 } },
+              ...(userGroupNumber ? [{ studentGroup: userGroupNumber }] : []),
+            ],
+          },
         ],
-      },
-    ];
+      };
+    }
   }
 
   return CalendarEvent.find(query).sort({
@@ -303,7 +314,17 @@ const findCalendarEventsForUser = async (req) => {
 
 const getCalendarEvents = async (req, res) => {
   try {
-    const events = await findCalendarEventsForUser(req);
+    const events = await findCalendarEventsForUser(
+      req.user.user_id,
+      req.query.mine === "true",
+    );
+
+    if (!events) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -319,22 +340,8 @@ const getCalendarEvents = async (req, res) => {
 };
 
 const getMyCalendarEvents = async (req, res) => {
-  try {
-    const events = await CalendarEvent.find({
-      createdBy: req.user.user_id,
-    }).sort({ start: 1, createdAt: 1 });
-
-    return res.status(200).json({
-      success: true,
-      data: events.map(serializeEvent),
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error fetching calendar events",
-      error: error.message,
-    });
-  }
+  req.query.mine = "true";
+  return getCalendarEvents(req, res);
 };
 
 const getCalendarEventById = async (req, res) => {
@@ -423,9 +430,25 @@ const deleteCalendarEvent = async (req, res) => {
   }
 };
 
-const exportCalendarIcs = async (req, res, next) => {
+const exportPublicCalendarIcs = async (req, res, next) => {
   try {
-    const events = await findCalendarEventsForUser(req);
+    const { userId } = req.params;
+
+    if (!/^[a-f\d]{24}$/i.test(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Neplatné ID používateľa",
+      });
+    }
+
+    const events = await findCalendarEventsForUser(userId);
+
+    if (!events) {
+      return res.status(404).json({
+        success: false,
+        message: "Používateľ nebol nájdený",
+      });
+    }
 
     const icalModule = await import("ical-generator");
     const ical = icalModule.default || icalModule;
@@ -448,8 +471,11 @@ const exportCalendarIcs = async (req, res, next) => {
     }
 
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-
-    res.setHeader("Content-Disposition", 'attachment; filename="calendar.ics"');
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="calendar-${userId}.ics"`,
+    );
+    res.setHeader("Cache-Control", "no-store");
 
     return res.status(200).send(calendar.toString());
   } catch (error) {
@@ -464,5 +490,5 @@ module.exports = {
   getMyCalendarEvents,
   getCalendarEventById,
   deleteCalendarEvent,
-  exportCalendarIcs,
+  exportPublicCalendarIcs,
 };

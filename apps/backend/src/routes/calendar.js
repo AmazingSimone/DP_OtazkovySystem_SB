@@ -13,7 +13,6 @@ const router = express.Router();
 
 router.get("/", getCalendarEvents);
 router.get("/my-events", getMyCalendarEvents);
-router.get("/calendar.ics", exportCalendarIcs);
 router.get("/:id", getCalendarEventById);
 router.post("/", createCalendarEvent);
 router.put("/:id", updateCalendarEvent);

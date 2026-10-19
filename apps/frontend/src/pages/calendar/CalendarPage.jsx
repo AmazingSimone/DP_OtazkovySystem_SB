@@ -152,7 +152,7 @@ const CalendarPage = () => {
   const [createCalendarEvent] = useCreateCalendarEventMutation();
   const [updateCalendarEvent] = useUpdateCalendarEventMutation();
   const [deleteCalendarEvent] = useDeleteCalendarEventMutation();
-  const [exportCalendarIcs] = useLazyExportCalendarIcsQuery();
+  const [exportPublicCalendarIcs] = useLazyExportCalendarIcsQuery();
 
   const calendarEvents = useMemo(
     () => (calendarEventsResponse?.data || []).map(mapApiEventToCalendarEvent),
@@ -218,8 +218,13 @@ const CalendarPage = () => {
   };
 
   const handleDownloadMyEvents = async () => {
+    if (!currentUserId) {
+      console.error('Nepodarilo sa stiahnuť kalendár: chýba ID používateľa.');
+      return;
+    }
+
     try {
-      const calendarIcs = await exportCalendarIcs().unwrap();
+      const calendarIcs = await exportPublicCalendarIcs(currentUserId).unwrap();
       const url = window.URL.createObjectURL(new Blob([calendarIcs], { type: 'text/calendar' }));
 
       const link = document.createElement('a');
