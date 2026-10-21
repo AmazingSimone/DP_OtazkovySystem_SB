@@ -11,6 +11,7 @@ import '@fullcalendar/mui/monarch/theme.css';
 import skLocale from '@fullcalendar/react/locales/sk';
 import '@fullcalendar/react/skeleton.css';
 import DownloadIcon from '@mui/icons-material/Download';
+import LinkIcon from '@mui/icons-material/Link';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import { darken, lighten, useTheme } from '@mui/material/styles';
@@ -19,6 +20,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { skSK } from '@mui/x-date-pickers/locales';
 import 'dayjs/locale/sk';
 import { useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import CalendarEventDetailModal from './components/CalendarEventDetailModal';
 import CreateCalendarEventModal from './components/CreateCalendarEventModal';
 
@@ -241,6 +243,22 @@ const CalendarPage = () => {
     }
   };
 
+  const handleCopyMyCalendarAddress = async () => {
+    if (!currentUserId) {
+      console.error('Nepodarilo sa skopírovať adresu kalendára: chýba ID používateľa.');
+      return;
+    }
+
+    const calendarAddress = `${window.location.origin}/api/public/calendar/${currentUserId}/calendar.ics`;
+
+    try {
+      await navigator.clipboard.writeText(calendarAddress);
+      toast.success('Adresa kalendara bola skopírovaná do schránky');
+    } catch (error) {
+      console.error('Nepodarilo sa skopírovať adresu kalendára:', error);
+    }
+  };
+
   const canEditSelectedEvent =
     !!selectedEvent?.extendedProps?.createdBy &&
     !!currentUserId &&
@@ -285,13 +303,24 @@ const CalendarPage = () => {
         <Typography variant="h4" component="h1">
           Kalendár
         </Typography>
-        <IconButton
-          aria-label="Stiahnuť kalendár"
-          title="Stiahnuť kalendár"
-          onClick={handleDownloadMyEvents}
-        >
-          <DownloadIcon />
-        </IconButton>
+
+        <Box>
+          <IconButton
+            aria-label="Stiahnuť kalendár"
+            title="Stiahnuť kalendár"
+            onClick={handleDownloadMyEvents}
+          >
+            <DownloadIcon />
+          </IconButton>
+
+          <IconButton
+            aria-label="Skopírovať adresu kalendára"
+            title="Skopírovať adresu kalendára"
+            onClick={handleCopyMyCalendarAddress}
+          >
+            <LinkIcon />
+          </IconButton>
+        </Box>
       </Box>
 
       <Box>
