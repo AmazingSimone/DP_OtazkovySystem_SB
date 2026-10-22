@@ -15,7 +15,9 @@ import {
   DialogTitle,
   FormControlLabel,
   Grid,
-  TextField
+  TextField,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
@@ -44,6 +46,8 @@ const createInitialFormData = () => {
 const isValidDayjs = (value) => dayjs.isDayjs(value) && value.isValid();
 
 const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const storedUser = authService.getUserFromStorage();
   const isTeacherFromStorage = storedUser?.isTeacher === true;
   const canAssignStudentGroups = isTeacherFromStorage || storedUser?.isAdmin === true;
@@ -166,6 +170,7 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
     <Dialog
       open={open}
       onClose={handleClose}
+      fullScreen={isMobile}
       maxWidth="sm"
       fullWidth
       scroll="paper"
@@ -174,7 +179,13 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           borderRadius: 3,
           width: 'min(560px, calc(100% - 32px))',
           maxHeight: 'calc(100% - 64px)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          ...(isMobile && {
+            width: '100%',
+            height: '100%',
+            maxHeight: 'none',
+            borderRadius: 0
+          })
         }
       }}
     >

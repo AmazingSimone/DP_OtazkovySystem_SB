@@ -12,7 +12,9 @@ import {
   FormControlLabel,
   Grid,
   IconButton,
-  TextField
+  TextField,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import dayjs from 'dayjs';
@@ -76,6 +78,8 @@ const mapEventToFormData = (eventData) => ({
 });
 
 const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, onDelete }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isAllDay = eventData?.allDay === true;
   const isPrivateEvent = eventData?.extendedProps?.isPrivate === true;
   const endDate =
@@ -197,6 +201,7 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
     <Dialog
       open={open}
       onClose={handleClose}
+      fullScreen={isMobile}
       maxWidth="sm"
       fullWidth
       scroll="paper"
@@ -205,7 +210,13 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
           borderRadius: 3,
           width: 'min(560px, calc(100% - 32px))',
           maxHeight: 'calc(100% - 64px)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          ...(isMobile && {
+            width: '100%',
+            height: '100%',
+            maxHeight: 'none',
+            borderRadius: 0
+          })
         }
       }}
     >
