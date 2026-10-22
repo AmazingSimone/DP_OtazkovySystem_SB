@@ -20,7 +20,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { skSK } from '@mui/x-date-pickers/locales';
 import dayjs from 'dayjs';
 import 'dayjs/locale/sk';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import CalendarEventDetailModal from './components/CalendarEventDetailModal';
 import CreateCalendarEventModal from './components/CreateCalendarEventModal';
@@ -160,6 +160,31 @@ const CalendarPage = () => {
   const calendarEvents = useMemo(
     () => (calendarEventsResponse?.data || []).map(mapApiEventToCalendarEvent),
     [calendarEventsResponse]
+  );
+
+  const getCalendarEventsForRange = useCallback(
+    ({ start, end }, successCallback) => {
+      const rangeStart = start.getTime();
+      const rangeEnd = end.getTime();
+      const eventsInRange = calendarEvents.filter((event) => {
+        const eventStart = new Date(event.start).getTime();
+        const eventEnd = event.end
+          ? new Date(event.end).getTime()
+          : event.allDay
+            ? eventStart + 24 * 60 * 60 * 1000
+            : eventStart + 60 * 60 * 1000;
+
+        return (
+          Number.isFinite(eventStart) &&
+          Number.isFinite(eventEnd) &&
+          eventStart < rangeEnd &&
+          eventEnd > rangeStart
+        );
+      });
+
+      successCallback(eventsInRange);
+    },
+    [calendarEvents]
   );
 
   const calendarEventsByDate = useMemo(() => {
@@ -481,7 +506,7 @@ const CalendarPage = () => {
           eventWillUnmount={detachCalendarEventHover}
           eventClick={handleEventClick}
           dayCellDidMount={handleDayCellDidMount}
-          events={calendarEvents}
+          events={getCalendarEventsForRange}
           addButton={{
             text: 'Pridať event',
             click() {
