@@ -522,12 +522,10 @@ const CalendarPage = () => {
           buttons={{
             multiMonthYear: { text: 'Obdobie' }
           }}
-          buttonText={{
-            today: 'Dnes',
-            month: 'Mesiac',
-            week: 'Týždeň',
-            list: 'Zoznam'
-          }}
+          todayText="Dnes"
+          monthText="Mesiac"
+          weekTextLong="Týždeň"
+          listText="Zoznam"
           eventTimeFormat={{
             hour: '2-digit',
             minute: '2-digit',
