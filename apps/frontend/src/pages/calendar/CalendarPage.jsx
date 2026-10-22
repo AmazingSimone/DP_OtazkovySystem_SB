@@ -430,6 +430,36 @@ const CalendarPage = () => {
 
       <Box
         sx={{
+          '& .calendar-responsive-toolbar > .MuiBox-root:first-of-type': {
+            px: { xs: 1, sm: 2 },
+            py: { xs: 1, sm: 2 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' }
+          },
+          '& .calendar-responsive-toolbar > .MuiBox-root:first-of-type > .MuiBox-root:first-of-type':
+            {
+              flexWrap: { xs: 'wrap', sm: 'nowrap' },
+              justifyContent: { xs: 'center', sm: 'flex-start' },
+              '& > .MuiTypography-root': {
+                flexBasis: { xs: '100%', sm: 'auto' },
+                order: { xs: 1, sm: 0 },
+                textAlign: { xs: 'center', sm: 'left' },
+                fontSize: { xs: '1.125rem', sm: '1.5rem' },
+                whiteSpace: 'normal'
+              }
+            },
+          '& .calendar-responsive-toolbar .MuiToggleButtonGroup-root': {
+            display: { xs: 'grid', sm: 'inline-flex' },
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'none' },
+            width: { xs: '100%', sm: 'auto' }
+          },
+          '& .calendar-responsive-toolbar .MuiToggleButton-root': {
+            minWidth: 0,
+            px: { xs: 1, sm: 2 },
+            py: { xs: 0.75, sm: 1 },
+            fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+            whiteSpace: 'nowrap'
+          },
           '& .calendar-today-cell': {
             backgroundColor: theme.palette.action.hover
           },
@@ -474,6 +504,7 @@ const CalendarPage = () => {
         ) : null}
 
         <EventCalendar
+          className="calendar-responsive-toolbar"
           key={calendarRenderKey}
           height="auto"
           aspectRatio={2.4}
