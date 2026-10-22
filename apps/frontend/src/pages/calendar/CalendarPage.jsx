@@ -18,6 +18,7 @@ import { darken, lighten, useTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { skSK } from '@mui/x-date-pickers/locales';
+import dayjs from 'dayjs';
 import 'dayjs/locale/sk';
 import { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -161,8 +162,74 @@ const CalendarPage = () => {
     [calendarEventsResponse]
   );
 
+  const calendarEventsByDate = useMemo(() => {
+    const eventsByDate = new Map();
+
+    calendarEvents.forEach((event) => {
+      const start = dayjs(event.start);
+      const end = event.end
+        ? dayjs(event.end)
+        : event.allDay
+          ? start.add(1, 'day')
+          : start.add(1, 'hour');
+
+      if (!start.isValid() || !end.isValid()) {
+        return;
+      }
+
+      if (event.allDay) {
+        const startDateKey = start.toDate().toISOString().slice(0, 10);
+        const endDateKey = end.toDate().toISOString().slice(0, 10);
+
+        for (
+          let date = dayjs(startDateKey);
+          date.format('YYYY-MM-DD') < endDateKey;
+          date = date.add(1, 'day')
+        ) {
+          const dateKey = date.format('YYYY-MM-DD');
+          const eventsForDate = eventsByDate.get(dateKey) || [];
+          eventsForDate.push(event);
+          eventsByDate.set(dateKey, eventsForDate);
+        }
+
+        return;
+      }
+
+      for (let date = start.startOf('day'); date.isBefore(end); date = date.add(1, 'day')) {
+        const dateKey = date.format('YYYY-MM-DD');
+        const eventsForDate = eventsByDate.get(dateKey) || [];
+        eventsForDate.push(event);
+        eventsByDate.set(dateKey, eventsForDate);
+      }
+    });
+
+    return eventsByDate;
+  }, [calendarEvents]);
+
   const handleEventDidMount = (info) => {
     attachCalendarEventHover(info, theme.palette.mode);
+  };
+
+  const renderDayCellContent = ({ date, dayNumberText, view }) => {
+    if (view.type !== 'multiMonthYear') {
+      return dayNumberText;
+    }
+
+    const eventsForDate = calendarEventsByDate.get(dayjs(date).format('YYYY-MM-DD'));
+
+    return (
+      <>
+        {dayNumberText}
+        {eventsForDate?.length > 1 && (
+          <span
+            className="calendar-year-event-overflow"
+            title={eventsForDate.map((event) => event.title).join(', ')}
+          >
+            +{eventsForDate.length - 1}
+          </span>
+        )}
+      </>
+    );
   };
 
   const handleDayCellDidMount = ({ el, isOther, isToday }) => {
@@ -355,6 +422,19 @@ const CalendarPage = () => {
           '& .calendar-other-month-number': {
             color: `${theme.palette.text.secondary} !important`,
             opacity: 0.65
+          },
+          '& .calendar-year-event-overflow': {
+            display: 'inline-block',
+            margin: '1px 2px',
+            padding: '0 4px',
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: 10,
+            backgroundColor: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+            fontSize: 9,
+            fontWeight: 600,
+            lineHeight: 1.3,
+            whiteSpace: 'nowrap'
           }
         }}
       >
@@ -375,6 +455,10 @@ const CalendarPage = () => {
           locale="sk"
           locales={[skLocale]}
           availableViews={['dayGridMonth', 'dayGridWeek', 'listWeek', 'multiMonthYear']}
+          views={{
+            multiMonthYear: { aspectRatio: 1.35 }
+          }}
+          dayCellTopContent={renderDayCellContent}
           editable
           selectable
           nowIndicator
