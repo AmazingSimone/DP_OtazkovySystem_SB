@@ -165,6 +165,19 @@ const CalendarPage = () => {
     attachCalendarEventHover(info, theme.palette.mode);
   };
 
+  const handleDayCellDidMount = ({ el, isOther, isToday }) => {
+    const dayNumber = el.querySelector('.fc-monarch-IdL, .fc-monarch-CSa');
+
+    if (isToday) {
+      el.classList.add('calendar-today-cell');
+      dayNumber?.classList.add('calendar-today-number');
+    }
+
+    if (isOther) {
+      dayNumber?.classList.add('calendar-other-month-number');
+    }
+  };
+
   const handleEventClick = (info) => {
     setSelectedEvent({
       id: info.event.id,
@@ -323,7 +336,28 @@ const CalendarPage = () => {
         </Box>
       </Box>
 
-      <Box>
+      <Box
+        sx={{
+          '& .calendar-today-cell': {
+            backgroundColor: theme.palette.action.hover
+          },
+          '& .calendar-today-cell .calendar-today-number': {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            backgroundColor: `${theme.palette.primary.main} !important`,
+            color: `${theme.palette.primary.contrastText} !important`,
+            fontWeight: '700 !important'
+          },
+          '& .calendar-other-month-number': {
+            color: `${theme.palette.text.secondary} !important`,
+            opacity: 0.65
+          }
+        }}
+      >
         {isCalendarLoading ? (
           <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
@@ -362,6 +396,7 @@ const CalendarPage = () => {
           eventDidMount={handleEventDidMount}
           eventWillUnmount={detachCalendarEventHover}
           eventClick={handleEventClick}
+          dayCellDidMount={handleDayCellDidMount}
           events={calendarEvents}
           addButton={{
             text: 'Pridať event',
