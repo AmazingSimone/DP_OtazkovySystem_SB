@@ -633,9 +633,11 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
-          <Button variant={isEditing ? 'text' : 'outlined'} color="error" onClick={handleClose}>
-            Zrušiť
-          </Button>
+          {!isEditing && (
+            <Button variant={'outlined'} color="error" onClick={handleClose}>
+              Zrušiť
+            </Button>
+          )}
 
           {canEdit && !isEditing && (
             <Button variant="contained" onClick={() => setIsEditing(true)}>
