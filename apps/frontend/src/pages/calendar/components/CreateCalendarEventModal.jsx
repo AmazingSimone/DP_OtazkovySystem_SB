@@ -173,7 +173,8 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
         sx: {
           borderRadius: 3,
           width: 'min(560px, calc(100% - 32px))',
-          overflow: 'visible'
+          maxHeight: 'calc(100% - 64px)',
+          overflow: 'hidden'
         }
       }}
     >
@@ -192,7 +193,8 @@ const CreateCalendarEventModal = ({ open, onClose, onEventCreated }) => {
           flexDirection: 'column',
           gap: 2,
           pt: 2.5,
-          overflowY: 'visible'
+          minHeight: 0,
+          overflowY: 'auto'
         }}
       >
         <Controller

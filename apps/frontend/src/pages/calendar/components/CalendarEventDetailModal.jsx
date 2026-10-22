@@ -204,7 +204,8 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
         sx: {
           borderRadius: 3,
           width: 'min(560px, calc(100% - 32px))',
-          overflow: 'visible'
+          maxHeight: 'calc(100% - 64px)',
+          overflow: 'hidden'
         }
       }}
     >
@@ -223,7 +224,8 @@ const CalendarEventDetailModal = ({ open, eventData, canEdit, onClose, onSave, o
           flexDirection: 'column',
           gap: 2,
           pt: 2.5,
-          overflowY: 'visible'
+          minHeight: 0,
+          overflowY: 'auto'
         }}
       >
         {isEditing ? (
