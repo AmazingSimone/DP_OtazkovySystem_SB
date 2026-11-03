@@ -6,10 +6,16 @@ import {
   useLazyExportCalendarIcsQuery,
   useUpdateCalendarEventMutation
 } from '@app/redux/api';
-import EventCalendar from '@fullcalendar/mui/monarch/EventCalendar';
+import EventCalendarToolbar from '@fullcalendar/mui/monarch/EventCalendarToolbar';
+import EventCalendarViews from '@fullcalendar/mui/monarch/EventCalendarViews';
 import '@fullcalendar/mui/monarch/theme.css';
+import { useCalendarController } from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/react/daygrid';
+import listPlugin from '@fullcalendar/react/list';
 import skLocale from '@fullcalendar/react/locales/sk';
+import multiMonthPlugin from '@fullcalendar/react/multimonth';
 import '@fullcalendar/react/skeleton.css';
+import timeGridPlugin from '@fullcalendar/react/timegrid';
 import DownloadIcon from '@mui/icons-material/Download';
 import LinkIcon from '@mui/icons-material/Link';
 import { Box, CircularProgress, Typography } from '@mui/material';
@@ -86,9 +92,42 @@ const attachCalendarEventHover = (info, mode) => {
   };
 };
 
+const attachTimedEventMarker = (info) => {
+  const { el, event } = info;
+
+  if (event.allDay) {
+    return;
+  }
+
+  const eventTime = [...el.querySelectorAll('*')].find(
+    (element) =>
+      /^\d{1,2}:\d{2}/.test(element.textContent.trim()) &&
+      ![...element.children].some((child) => /^\d{1,2}:\d{2}/.test(child.textContent.trim()))
+  );
+  const eventMain = eventTime || el.querySelector('.fc-event-main') || el;
+  const marker = document.createElement('span');
+  marker.className = 'calendar-timed-event-marker';
+  marker.style.backgroundColor = event.backgroundColor || event.color || 'currentColor';
+  eventMain.insertBefore(marker, eventMain.firstChild);
+  el.__calendarTimedEventMarker = marker;
+};
+
 const detachCalendarEventHover = (info) => {
   info.el.__calendarHoverCleanup?.();
   delete info.el.__calendarHoverCleanup;
+  info.el.__calendarClickCleanup?.();
+  delete info.el.__calendarClickCleanup;
+  info.el.__calendarTimedEventMarker?.remove();
+  delete info.el.__calendarTimedEventMarker;
+};
+
+const attachCalendarEventClick = (info, handleClick) => {
+  const handleEventClick = () => handleClick(info);
+
+  info.el.addEventListener('click', handleEventClick);
+  info.el.__calendarClickCleanup = () => {
+    info.el.removeEventListener('click', handleEventClick);
+  };
 };
 
 const getCreatedById = (createdBy) => {
@@ -134,6 +173,55 @@ const buildCalendarEventPayload = (eventData) => ({
   description: eventData.description?.trim() || '',
   color: eventData.color
 });
+
+const StyledCalendar = ({ addButton, availableViews, plugins, ...calendarOptions }) => {
+  const controller = useCalendarController();
+  const theme = useTheme();
+  const isHeightAuto =
+    calendarOptions.height === 'auto' || calendarOptions.contentHeight === 'auto';
+
+  return (
+    <Box
+      className={calendarOptions.className}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: calendarOptions.height,
+        bgcolor: 'background.paper',
+        borderStyle: 'solid',
+        borderColor: 'divider',
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderRadius: 1,
+        '--calendar-grid-color': theme.palette.divider,
+        overflow: !isHeightAuto ? 'hidden' : undefined
+      }}
+    >
+      <EventCalendarToolbar
+        sx={{
+          padding: 2,
+          '& .MuiToggleButtonGroup-root': {
+            flexWrap: 'wrap'
+          }
+        }}
+        controller={controller}
+        availableViews={availableViews}
+        addButton={addButton}
+      />
+      <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+        <EventCalendarViews
+          {...calendarOptions}
+          className={undefined}
+          initialView={availableViews[0]}
+          plugins={plugins}
+          controller={controller}
+        />
+      </Box>
+    </Box>
+  );
+};
 
 const CalendarPage = () => {
   const [openCreateEventModal, setOpenCreateEventModal] = useState(false);
@@ -233,6 +321,8 @@ const CalendarPage = () => {
 
   const handleEventDidMount = (info) => {
     attachCalendarEventHover(info, theme.palette.mode);
+    attachCalendarEventClick(info, handleEventClick);
+    attachTimedEventMarker(info);
   };
 
   const renderDayCellContent = ({ date, dayNumberText, view }) => {
@@ -259,6 +349,23 @@ const CalendarPage = () => {
 
   const handleDayCellDidMount = ({ el, isOther, isToday }) => {
     const dayNumber = el.querySelector('.fc-monarch-IdL, .fc-monarch-CSa');
+    const row = el.parentElement;
+    const rows = row?.parentElement?.children;
+    const isLastCellInRow = !row || el === row.lastElementChild;
+    const isLastRow = !rows || row === rows[rows.length - 1];
+
+    const gridColor = 'var(--calendar-grid-color)';
+    const shadows = [];
+
+    if (!isLastCellInRow) {
+      shadows.push(`inset -1px 0 0 ${gridColor}`);
+    }
+
+    if (!isLastRow) {
+      shadows.push(`inset 0 -1px 0 ${gridColor}`);
+    }
+
+    el.style.setProperty('box-shadow', shadows.join(', '), 'important');
 
     if (isToday) {
       el.classList.add('calendar-today-cell');
@@ -490,6 +597,15 @@ const CalendarPage = () => {
             fontWeight: 600,
             lineHeight: 1.3,
             whiteSpace: 'nowrap'
+          },
+          '& .calendar-timed-event-marker': {
+            display: 'inline-block',
+            width: 6,
+            height: 6,
+            marginRight: 0.5,
+            borderRadius: '50%',
+            flexShrink: 0,
+            verticalAlign: 'middle'
           }
         }}
       >
@@ -503,29 +619,26 @@ const CalendarPage = () => {
           </Box>
         ) : null}
 
-        <EventCalendar
+        <StyledCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, multiMonthPlugin]}
+          availableViews={['dayGridMonth', 'dayGridWeek', 'listWeek', 'multiMonthYear']}
+          addButton={{
+            text: 'Pridať event',
+            click: () => setOpenCreateEventModal(true)
+          }}
           className="calendar-responsive-toolbar"
           key={calendarRenderKey}
           height="auto"
           aspectRatio={2.4}
           locale="sk"
           locales={[skLocale]}
-          availableViews={['dayGridMonth', 'dayGridWeek', 'listWeek', 'multiMonthYear']}
-          views={{
-            multiMonthYear: { aspectRatio: 1.35 }
-          }}
-          dayCellTopContent={renderDayCellContent}
-          editable
-          selectable
-          nowIndicator
-          navLinks
-          buttons={{
-            multiMonthYear: { text: 'Obdobie' }
-          }}
           todayText="Dnes"
           monthText="Mesiac"
           weekTextLong="Týždeň"
           listText="Zoznam"
+          views={{ multiMonthYear: { aspectRatio: 1.35 } }}
+          dayCellTopContent={renderDayCellContent}
+          nowIndicator
           eventTimeFormat={{
             hour: '2-digit',
             minute: '2-digit',
@@ -533,16 +646,8 @@ const CalendarPage = () => {
           }}
           eventDidMount={handleEventDidMount}
           eventWillUnmount={detachCalendarEventHover}
-          eventClick={handleEventClick}
           dayCellDidMount={handleDayCellDidMount}
           events={getCalendarEventsForRange}
-          addButton={{
-            text: 'Pridať event',
-            click() {
-              // alert('add event...');
-              setOpenCreateEventModal(true);
-            }
-          }}
         />
       </Box>
     </Box>
