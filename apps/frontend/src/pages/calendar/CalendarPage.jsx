@@ -69,6 +69,7 @@ const attachCalendarEventHover = (info, mode) => {
     'background-color 0.16s ease, border-color 0.16s ease',
     'important'
   );
+  el.style.setProperty('cursor', 'pointer', 'important');
 
   const handleMouseEnter = () => {
     el.style.setProperty('background-color', hoverBackground, 'important');
