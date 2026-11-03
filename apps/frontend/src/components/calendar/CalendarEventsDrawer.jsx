@@ -163,12 +163,10 @@ const CalendarEventsDrawer = () => {
                       )}
                     </>
                   }
-                  slotProps={{
-                    primary: {
-                      sx: {
-                        fontWeight: 600,
-                        overflowWrap: 'anywhere'
-                      }
+                  primaryTypographyProps={{
+                    sx: {
+                      fontWeight: 600,
+                      overflowWrap: 'anywhere'
                     }
                   }}
                 />
