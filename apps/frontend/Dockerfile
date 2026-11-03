@@ -1,15 +1,20 @@
-FROM node:20-alpine
-WORKDIR "/app"
+FROM node:21.7.3-alpine AS builder
+
+RUN npm i -g pnpm
+
+WORKDIR /app
 
 ENV CI=true
-COPY ./package.json .
-RUN npm install
+
+COPY ./package.json ./pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
-RUN npm run build
-
+RUN pnpm run build
 
 FROM nginx
+
 EXPOSE 80
+
 COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=0 /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
