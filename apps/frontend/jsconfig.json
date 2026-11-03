@@ -7,9 +7,8 @@
 
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@app/*": ["src/*"]
+      "@app/*": ["./src/*"]
     }
   },
   "checkJs": false

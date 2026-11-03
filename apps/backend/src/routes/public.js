@@ -1,7 +1,21 @@
 const express = require("express");
 const router = express.Router();
-const { SignIn, Register, RegisterTeacher, checkUiVersion, signinTeacher, ConfirmEmail, requestPasswordReset, resetPassword } = require("../controllers/publicController");
+const {
+  SignIn,
+  Register,
+  RegisterTeacher,
+  checkUiVersion,
+  signinTeacher,
+  ConfirmEmail,
+  requestPasswordReset,
+  resetPassword,
+} = require("../controllers/publicController");
 
+const {
+  exportPublicCalendarIcs,
+} = require("../controllers/calendarController");
+
+router.get("/calendar/:userId/calendar.ics", exportPublicCalendarIcs);
 router.post("/signin", SignIn);
 router.post("/signin-teacher", signinTeacher);
 router.post("/register", Register);

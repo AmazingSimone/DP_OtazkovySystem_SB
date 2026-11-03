@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 
 COPY package.json  ./
 # COPY package.json  pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install
+RUN npm install -g pnpm && pnpm install --ignore-scripts
 
 # COPY package.json ./
 # RUN pnpm install --no-frozen-lockfile
