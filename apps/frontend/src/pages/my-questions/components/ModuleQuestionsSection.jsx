@@ -1,18 +1,86 @@
+import { useGetQuestionAssignmentsQuery } from '@app/redux/api';
 import { Box, Divider, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 import QuestionCard from './QuestionCard';
 
+const gridSx = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))',
+  gap: 2
+};
+
+/**
+ * The questions the server dealt to this student for review in one module.
+ * They are dealt once at the start of week 2 and are the same on every device and reload.
+ */
+const AssignedReviews = ({ modulId, userId, currentWeek, onValidate }) => {
+  const { data, isLoading } = useGetQuestionAssignmentsQuery(
+    { userId, modulId },
+    { skip: !userId || !modulId }
+  );
+  const assignments = data?.data || [];
+  const automaticPoints = data?.automaticPoints || 0;
+
+  return (
+    <Box sx={gridSx}>
+      {[0, 1].map((i) => {
+        const assignment = assignments[i];
+        if (assignment?.question?._id) {
+          return (
+            <QuestionCard
+              key={assignment._id}
+              question={assignment.question}
+              assignment={assignment}
+              currentWeek={currentWeek}
+              onValidate={onValidate}
+            />
+          );
+        }
+        return (
+          <Box
+            key={`empty-${i}`}
+            sx={{
+              p: 2,
+              border: '1px dashed',
+              borderColor: 'grey.200',
+              borderRadius: 1,
+              color: 'text.disabled',
+              height: 'fit-content'
+            }}
+          >
+            <Typography>
+              {isLoading
+                ? 'Načítavanie...'
+                : automaticPoints > 0
+                  ? 'Automatický bod: pre teba nezostala žiadna otázka na recenziu'
+                  : 'Žiadna otázka na recenziu'}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
+AssignedReviews.propTypes = {
+  modulId: PropTypes.string.isRequired,
+  userId: PropTypes.string.isRequired,
+  currentWeek: PropTypes.number.isRequired,
+  onValidate: PropTypes.func
+};
+
 const ModuleQuestionsSection = ({
+  modulId,
   modulName,
   weekStatus,
   moduleQuestions,
-  validatedQuestions,
   currentWeek,
   userId,
   showDivider = false,
   onValidate,
   onRespond,
-  onEdit
+  onEdit,
+  onPublish
 }) => {
   return (
     <Box>
@@ -25,36 +93,24 @@ const ModuleQuestionsSection = ({
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Status: {weekStatus} • {moduleQuestions.length} otázok
-          {currentWeek >= 2 &&
-            validatedQuestions.length > 0 &&
-            ` • ${validatedQuestions.length} validovaných`}
         </Typography>
       </Box>
 
-      {/* Week 1: User's own questions */}
+      {/* The student's own questions */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
           Moje otázky
         </Typography>
 
-        {/* Questions in 2-column grid */}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-            gap: 2,
-            mb: 2
-          }}
-        >
+        <Box sx={{ ...gridSx, mb: 2 }}>
           {moduleQuestions.map((question) => (
             <QuestionCard
               key={question._id}
               question={question}
               currentWeek={currentWeek}
-              isValidatedByUser={false}
-              userId={userId}
               onRespond={onRespond}
               onEdit={onEdit}
+              onPublish={onPublish}
             />
           ))}
         </Box>
@@ -66,53 +122,18 @@ const ModuleQuestionsSection = ({
         )}
       </Box>
 
-      {/* Week 2: Questions validated by user (only show if week >= 2) */}
+      {/* Questions dealt to the student for review, from week 2 on */}
       {currentWeek >= 2 && (
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: 'secondary.main' }}>
-            Otázky, ktoré som validoval/a
+            Otázky, ktoré recenzujem
           </Typography>
-
-          {/* Always show 2 question slots (same as Week2.jsx) */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-              gap: 2
-            }}
-          >
-            {[0, 1].map((i) => {
-              const q = validatedQuestions[i];
-              if (q) {
-                return (
-                  <QuestionCard
-                    key={q._id}
-                    question={q}
-                    currentWeek={currentWeek}
-                    isValidatedByUser={true}
-                    userId={userId}
-                    onValidate={onValidate}
-                  />
-                );
-              } else {
-                return (
-                  <Box
-                    key={`empty-${i}`}
-                    sx={{
-                      p: 2,
-                      border: '1px dashed',
-                      borderColor: 'grey.200',
-                      borderRadius: 1,
-                      color: 'text.disabled',
-                      height: 'fit-content'
-                    }}
-                  >
-                    <Typography>Žiadna otázka na validáciu</Typography>
-                  </Box>
-                );
-              }
-            })}
-          </Box>
+          <AssignedReviews
+            modulId={modulId}
+            userId={userId}
+            currentWeek={currentWeek}
+            onValidate={onValidate}
+          />
         </Box>
       )}
     </Box>
@@ -120,6 +141,7 @@ const ModuleQuestionsSection = ({
 };
 
 ModuleQuestionsSection.propTypes = {
+  modulId: PropTypes.string.isRequired,
   modulName: PropTypes.string.isRequired,
   weekStatus: PropTypes.string.isRequired,
   moduleQuestions: PropTypes.arrayOf(
@@ -127,13 +149,13 @@ ModuleQuestionsSection.propTypes = {
       _id: PropTypes.string.isRequired
     })
   ).isRequired,
-  validatedQuestions: PropTypes.array.isRequired,
   currentWeek: PropTypes.number.isRequired,
   userId: PropTypes.string.isRequired,
   showDivider: PropTypes.bool,
   onValidate: PropTypes.func,
   onRespond: PropTypes.func,
-  onEdit: PropTypes.func
+  onEdit: PropTypes.func,
+  onPublish: PropTypes.func
 };
 
 export default ModuleQuestionsSection;

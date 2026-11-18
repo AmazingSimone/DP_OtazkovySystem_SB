@@ -21,13 +21,13 @@ const Week2 = ({
   const assignments = assignmentsData?.data || [];
   const automaticPoints = assignmentsData?.automaticPoints || 0;
 
-  // Per-student validation status now lives on the assignment, not on q.validated_by
+  // The questions are dealt once by the server at the start of week 2 and never change.
   const questionsValidatedByUser = assignments.filter((a) => a.validated).length;
 
-  // Week 2 points are module-specific: 1 point per validated assigned question (max 2)
-  const earnedPoints = questionsValidatedByUser;
+  // 1 point per review done, plus 1 automatic point for every slot that got no question
   const maxPoints = 2;
-  const isCompleted = questionsValidatedByUser >= 2;
+  const earnedPoints = Math.min(questionsValidatedByUser + automaticPoints, maxPoints);
+  const isCompleted = earnedPoints >= maxPoints;
 
   return (
     <Box
@@ -46,10 +46,10 @@ const Week2 = ({
       </Typography>
       <Typography color="text.secondary">{status}</Typography>
       <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-        Validuj 2 otázky od iných študentov
+        Zrecenzuj 2 anonymné otázky od iných študentov
       </Typography>
       <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
-        {isCompleted && <Chip label="Validácia dokončená" color="success" size="small" />}
+        {isCompleted && <Chip label="Recenzie dokončené" color="success" size="small" />}
         <Chip
           label={`${earnedPoints}/${maxPoints} bodov`}
           color={earnedPoints > 0 ? (earnedPoints >= maxPoints ? 'success' : 'warning') : 'default'}
@@ -104,11 +104,12 @@ const Week2 = ({
                         key={key}
                         variant="body2"
                         sx={{
-                          color: 'text.secondary',
+                          color: key === q.correct ? 'success.dark' : 'text.secondary',
+                          fontWeight: key === q.correct ? 600 : 400,
                           ml: 1
                         }}
                       >
-                        {key.toUpperCase()}) {value}
+                        {key.toUpperCase()}) {value} {key === q.correct && '✓'}
                       </Typography>
                     ))}
                 </Box>
@@ -135,7 +136,7 @@ const Week2 = ({
                     color="text.secondary"
                     sx={{ mt: 1, display: 'block' }}
                   >
-                    {validated ? 'Kliknite pre zmenu validácie' : 'Kliknite pre validáciu'}
+                    {validated ? 'Kliknite pre zmenu recenzie' : 'Kliknite pre recenziu'}
                   </Typography>
                 )}
               </Box>
@@ -156,8 +157,8 @@ const Week2 = ({
                   {assignmentsLoading
                     ? 'Načítavanie...'
                     : automaticPoints > 0
-                      ? `Automatický bod udelený (nedostatok otázok)`
-                      : 'Žiadna otázka na validáciu'}
+                      ? 'Automatický bod: pre teba nezostala žiadna otázka na recenziu'
+                      : 'Otázky na recenziu sa pridelia na začiatku 2. týždňa'}
                 </Typography>
               </Box>
             );

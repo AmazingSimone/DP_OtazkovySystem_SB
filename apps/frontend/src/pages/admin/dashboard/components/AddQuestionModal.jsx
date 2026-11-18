@@ -84,7 +84,7 @@ const AddQuestionModal = ({ disabled = false, modulId, onCreated }) => {
       if (onCreated) onCreated(created);
       handleClose();
     } catch (err) {
-      toast.error('Chyba pri pridávaní otázky', err?.data?.message || 'Skúste to neskôr');
+      toast.error(err?.data?.message || 'Chyba pri pridávaní otázky. Skúste to neskôr.');
     }
   };
 

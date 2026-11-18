@@ -1,9 +1,16 @@
-import { useUpdateQuestionMutation } from '@app/redux/api';
+import { usePublishQuestionMutation, useUpdateQuestionMutation } from '@app/redux/api';
+import { REVIEW_TAG_LABELS } from '@app/utils/questionFlowLabels';
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import EditQuestionModal from '../EditQuestionModal';
 
+/**
+ * Week 3: the author sees the anonymous review of each of their questions, says whether the
+ * review was right, may correct a question reviewed as faulty, and publishes it.
+ * Only publishing earns the point.
+ */
 const Week3 = ({
   week,
   isCurrent,
@@ -14,38 +21,29 @@ const Week3 = ({
   setQuestionToRespond,
   setRespondOpen
 }) => {
-  // Mutation for updating questions (only available during Week 3)
   const [updateQuestion] = useUpdateQuestionMutation();
+  const [publishQuestion, { isLoading: isPublishing }] = usePublishQuestionMutation();
 
-  // State for edit modal
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [questionToEdit, setQuestionToEdit] = useState(null);
 
-  // Get user's questions that should have been validated
   const userQuestions = (modulQuestions || []).filter(
     (q) => String(q.createdBy ?? q.created_by) === String(userId)
   );
 
-  // Use the database fields directly - no localStorage needed
-  const questionsWithValidations = userQuestions.map((q) => {
-    return {
-      ...q,
-      // Use database fields directly
-      validated: q.validated,
-      validation_comment: q.validation_comment,
-      validated_at: q.validated_at,
-      validated_by: q.validated_by,
-      user_agreement: q.user_agreement
-    };
-  });
-
-  // Count how many questions have responses
-  const questionsWithResponses = questionsWithValidations.filter((q) => q.user_agreement).length;
-  const isCompleted = questionsWithResponses >= 2;
-
-  // Week 3 points are module-specific: 1 point per response in this module (max 2)
-  const earnedPoints = Math.min(questionsWithResponses, 2);
+  const publishedCount = userQuestions.filter((q) => q.published).length;
   const maxPoints = 2;
+  const earnedPoints = Math.min(publishedCount, maxPoints);
+  const isCompleted = userQuestions.length > 0 && publishedCount >= Math.min(userQuestions.length, 2);
+
+  const handlePublish = async (question) => {
+    try {
+      await publishQuestion(question._id).unwrap();
+      toast.success('Otázka bola publikovaná');
+    } catch (error) {
+      toast.error(error?.data?.message || 'Otázku sa nepodarilo publikovať');
+    }
+  };
 
   return (
     <Box
@@ -64,42 +62,40 @@ const Week3 = ({
       </Typography>
       <Typography color="text.secondary">{status}</Typography>
       <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-        Reaguj na validácie tvojích otázok {isCurrent && '• Môžeš upraviť svoje otázky'}
+        Vyjadri sa k recenziám svojich otázok a publikuj ich. Bod získaš za každú publikovanú
+        otázku. Upraviť môžeš iba otázku označenú ako chybnú.
       </Typography>
       <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
-        {isCompleted && <Chip label="Odpovede dokončené" color="success" size="small" />}
+        {isCompleted && <Chip label="Všetko publikované" color="success" size="small" />}
         <Chip
           label={`${earnedPoints}/${maxPoints} bodov`}
           color={earnedPoints > 0 ? (earnedPoints >= maxPoints ? 'success' : 'warning') : 'default'}
           size="small"
           variant="outlined"
         />
-        {earnedPoints >= maxPoints && (
-          <Chip label="Všetky body získané" color="success" size="small" />
-        )}
       </Stack>
       <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {questionsWithValidations.slice(0, 2).map((q, i) => {
-          const responded = q.user_agreement; // Use database field instead of localStorage
-          // Check if the question has actually been validated by someone
-          const hasValidation = q.validated_by !== undefined && q.validated_by !== null;
-          const canRespondInWeek3 = isCurrent && hasValidation;
+        {userQuestions.length === 0 && (
+          <Typography color="text.secondary">V tomto module nemáš žiadne otázky.</Typography>
+        )}
+        {userQuestions.slice(0, 2).map((q) => {
+          const hasReview = Boolean(q.validated_at);
+          const responded = q.user_agreement?.responded_at ? q.user_agreement : null;
+          const isFault = hasReview && q.validated === false;
+          const canAct = isCurrent && hasReview && !q.published;
+          const tagLabel = REVIEW_TAG_LABELS[q.review_tag];
 
           return (
             <Box
-              key={i}
+              key={q._id}
               sx={{
                 p: 1,
                 border: '1px solid',
-                borderColor: responded
-                  ? 'success.main'
-                  : hasValidation
-                    ? 'warning.main'
-                    : '#000000', // Black border for unvalidated questions
+                borderColor: q.published ? 'success.main' : hasReview ? 'warning.main' : 'grey.400',
                 borderRadius: 1,
-                cursor: canRespondInWeek3 ? 'pointer' : 'default',
-                bgcolor: responded ? 'success.50' : hasValidation ? 'warning.50' : 'transparent',
-                '&:hover': !canRespondInWeek3
+                cursor: canAct ? 'pointer' : 'default',
+                bgcolor: q.published ? 'success.50' : hasReview ? 'warning.50' : 'transparent',
+                '&:hover': !canAct
                   ? {}
                   : {
                       backgroundColor: (theme) =>
@@ -107,7 +103,7 @@ const Week3 = ({
                     }
               }}
               onClick={() => {
-                if (canRespondInWeek3) {
+                if (canAct) {
                   setQuestionToRespond(q);
                   setRespondOpen(true);
                 }
@@ -130,74 +126,90 @@ const Week3 = ({
                     </Typography>
                   ))}
               </Box>
+
               <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                {hasValidation ? (
+                {hasReview ? (
                   <Chip
-                    label={q.validated ? 'Validná' : 'Nevalidná'}
+                    label={q.validated ? 'Recenzia: validná' : 'Recenzia: chybná'}
                     color={q.validated ? 'success' : 'error'}
                     size="small"
                   />
                 ) : (
-                  <Chip
-                    label="Nevalidovaná"
-                    size="small"
-                    sx={{
-                      backgroundColor: '#000000',
-                      color: 'white',
-                      '&:hover': {
-                        backgroundColor: '#333333'
-                      }
-                    }}
-                  />
+                  <Chip label="Recenzia ešte nie je k dispozícii" size="small" variant="outlined" />
                 )}
+                {tagLabel && <Chip label={tagLabel} color="warning" size="small" variant="outlined" />}
                 {responded && (
                   <Chip
-                    label={responded.agreed ? 'Súhlasím' : 'Nesúhlasím'}
+                    label={responded.agreed ? 'Súhlasím s recenziou' : 'Nesúhlasím s recenziou'}
                     color={responded.agreed ? 'success' : 'warning'}
                     size="small"
+                    variant="outlined"
                   />
                 )}
-
-                {/* Edit button - only show during Week 3 (current week) */}
-                {isCurrent && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="primary"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent triggering the respond modal
-                      setQuestionToEdit(q);
-                      setEditModalOpen(true);
-                    }}
-                    sx={{ ml: 'auto' }}
-                  >
-                    Upraviť
-                  </Button>
-                )}
+                {q.published && <Chip label="Publikovaná" color="success" size="small" />}
               </Box>
-              {q.validation_comment && (
+
+              {hasReview && q.validation_comment && (
                 <Typography
                   variant="body2"
                   sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary' }}
                 >
-                  Validačný komentár: {q.validation_comment}
+                  Komentár recenzie: {q.validation_comment}
                 </Typography>
               )}
               {responded && responded.comment && (
-                <Typography
-                  variant="body2"
-                  sx={{ mt: 1, fontStyle: 'italic', color: 'text.primary' }}
-                >
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.primary' }}>
                   Tvoja odpoveď: {responded.comment}
                 </Typography>
               )}
-              {canRespondInWeek3 && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: 1, display: 'block' }}
-                >
-                  {responded ? 'Kliknite pre úpravu odpovede' : 'Kliknite pre odpoveď'}
+
+              {canAct && (
+                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setQuestionToRespond(q);
+                      setRespondOpen(true);
+                    }}
+                  >
+                    {responded ? 'Zmeniť vyjadrenie' : 'Vyjadriť sa k recenzii'}
+                  </Button>
+                  {isFault && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setQuestionToEdit(q);
+                        setEditModalOpen(true);
+                      }}
+                    >
+                      Opraviť otázku
+                    </Button>
+                  )}
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={!responded || isPublishing}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePublish(q);
+                    }}
+                  >
+                    Publikovať
+                  </Button>
+                </Stack>
+              )}
+              {canAct && !responded && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Najprv sa vyjadri k recenzii, potom môžeš otázku publikovať.
+                </Typography>
+              )}
+              {q.published && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Otázka čaká na posúdenie učiteľom a už ju nie je možné meniť.
                 </Typography>
               )}
             </Box>
@@ -205,7 +217,7 @@ const Week3 = ({
         })}
       </Box>
 
-      {/* Edit Question Modal - only available during Week 3 */}
+      {/* Correcting is offered only for questions reviewed as faulty; the server checks it too */}
       <EditQuestionModal
         open={editModalOpen}
         question={questionToEdit}
@@ -214,13 +226,8 @@ const Week3 = ({
           setQuestionToEdit(null);
         }}
         onSubmit={async (questionId, updatedData) => {
-          try {
-            await updateQuestion({ questionId, ...updatedData }).unwrap();
-            // The RTK Query will automatically invalidate cache and refresh data
-          } catch (error) {
-            console.error('Error updating question:', error);
-            throw error; // Re-throw so the modal can handle it
-          }
+          // The modal shows the result, including the server's reason when it refuses
+          await updateQuestion({ questionId, ...updatedData }).unwrap();
         }}
       />
     </Box>

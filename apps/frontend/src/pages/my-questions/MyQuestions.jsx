@@ -1,4 +1,4 @@
-import { useCurrentSubject } from '@app/hooks/useCurrentSubject'; // adjust path as needed
+import { useCurrentSubject } from '@app/hooks/useCurrentSubject';
 import EditQuestionModal from '@app/pages/admin/dashboard/components/EditQuestionModal';
 import RespondToValidationModal from '@app/pages/admin/subjects/components/RespondToValidationModal';
 import ValidateQuestionModal from '@app/pages/admin/subjects/components/ValidateQuestionModal';
@@ -6,17 +6,26 @@ import * as authService from '@app/pages/auth/authService';
 import {
   useGetModulsBySubjectQuery,
   useGetQuestionByUserIdQuery,
-  useGetQuestionsByModulQuery,
-  useGetQuestionsBySubjectIdQuery,
+  usePublishQuestionMutation,
   useRespondToValidationMutation,
   useUpdateQuestionMutation,
   useValidateQuestionMutation
 } from '@app/redux/api';
 import { Box, Typography } from '@mui/material';
 import React from 'react';
+import { toast } from 'react-toastify';
 import FilterControls from './components/FilterControls';
 import ModuleQuestionsSection from './components/ModuleQuestionsSection';
 
+const pageSx = { pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } };
+
+/**
+ * The student's overview of the question flow in the selected subject, module by module:
+ * their own questions and the questions they review.
+ *
+ * Which week is running, which questions a student reviews and what may be changed are all
+ * decided by the server. This page only shows that state and sends the student's actions.
+ */
 const MyQuestions = () => {
   const auth = authService.getUserFromStorage();
   const userId = auth.id;
@@ -25,258 +34,62 @@ const MyQuestions = () => {
   const currentSubject = useCurrentSubject();
   const subjectId = currentSubject?._id || currentSubject?.id || '';
 
-  // Filter state
-  const [filter, setFilter] = React.useState({
-    date: '',
-    modulId: ''
-  });
+  const [filter, setFilter] = React.useState({ date: '', modulId: '' });
 
-  // Debug: manual week override is disabled
-  // const [debugWeekOverride, setDebugWeekOverride] = React.useState(null);
-
-  // Validation modal state
   const [validateOpen, setValidateOpen] = React.useState(false);
-  const [questionToValidate, setQuestionToValidate] = React.useState(null);
-  const [validateQuestion] = useValidateQuestionMutation();
-
-  // Week 3 respond/edit modal states
+  const [toValidate, setToValidate] = React.useState(null); // { question, assignment }
   const [respondOpen, setRespondOpen] = React.useState(false);
   const [questionToRespond, setQuestionToRespond] = React.useState(null);
-  const [respondToValidation] = useRespondToValidationMutation();
-
   const [editModalOpen, setEditModalOpen] = React.useState(false);
   const [questionToEdit, setQuestionToEdit] = React.useState(null);
+
+  const [validateQuestion] = useValidateQuestionMutation();
+  const [respondToValidation] = useRespondToValidationMutation();
   const [updateQuestion] = useUpdateQuestionMutation();
+  const [publishQuestion] = usePublishQuestionMutation();
 
-  // Fetch modules for the selected subject
-  const { data: subjectModuls = [] } = useGetModulsBySubjectQuery(subjectId, {
-    skip: !subjectId
-  });
-
-  // Fetch all user's questions
+  const { data: subjectModuls = [] } = useGetModulsBySubjectQuery(subjectId, { skip: !subjectId });
   const {
     data: questions = [],
     isLoading,
     error
-  } = useGetQuestionByUserIdQuery(userId, {
-    skip: !userId
-  });
+  } = useGetQuestionByUserIdQuery(userId, { skip: !userId });
 
-  // Fetch all questions for the currently filtered module (for Week 2 validation)
-  const { data: currentModuleQuestions = [] } = useGetQuestionsByModulQuery(filter.modulId, {
-    skip: !filter.modulId
-  });
-
-  // Fetch ALL questions in the subject (for when no specific module is selected)
-  const { data: allSubjectQuestions = [] } = useGetQuestionsBySubjectIdQuery(subjectId, {
-    skip: !subjectId || !!filter.modulId // Skip if no subject or if specific module is selected
-  });
-
-  // State management helpers (restored for Week 2 functionality)
-  const getWeekStorageKey = React.useCallback(
-    (moduleId, weekNum, type) => `module-${moduleId}-week-${weekNum}-${type}`,
-    []
-  );
-
-  const saveWeekState = React.useCallback(
-    (moduleId, weekNum, type, data) => {
-      try {
-        localStorage.setItem(getWeekStorageKey(moduleId, weekNum, type), JSON.stringify(data));
-      } catch {
-        // ignore storage errors
-      }
-    },
-    [getWeekStorageKey]
-  );
-
-  const getWeekState = React.useCallback(
-    (moduleId, weekNum, type) => {
-      try {
-        const raw = localStorage.getItem(getWeekStorageKey(moduleId, weekNum, type));
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    },
-    [getWeekStorageKey]
-  );
-
-  // State for currently selected module (for Week 2 question loading)
-  // Note: Disabled for now to prevent infinite re-renders
-  // TODO: Implement proper Week 2 validation question loading
-
-  // Helper to determine current week for a module
-  const getCurrentWeek = (modul) => {
-    if (!modul || !modul.date_start || !modul.date_end) return 1;
-
-    try {
-      const now = new Date();
-      const start = new Date(modul.date_start);
-      const end = new Date(modul.date_end);
-
-      if (now < start) return 0; // Not started
-      if (now > end) return 4; // Finished
-
-      // Use custom phase boundaries if the teacher set them
-      if (modul.week3_start && now >= new Date(modul.week3_start)) return 3;
-      if (modul.week2_start && now >= new Date(modul.week2_start)) return 2;
-      if (modul.week2_start || modul.week3_start) return 1; // Custom phases set, we're in phase 1
-
-      // Fallback: split range into equal 7-day buckets
-      const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
-      const week = Math.floor(diffDays / 7) + 1;
-      return Math.min(Math.max(week, 1), 3);
-    } catch {
-      return 1;
-    }
-  };
-
-  // State management helpers (disabled for now to prevent infinite loops)
-  // TODO: Re-implement when Week 2 validation is properly implemented
-  // const getWeekStorageKey = React.useCallback(
-  //   (moduleId, weekNum, type) => `module-${moduleId}-week-${weekNum}-${type}`,
-  //   []
-  // );
-  // const saveWeekState = React.useCallback(...);
-  // const getWeekState = React.useCallback(...);
-
-  // Helper to get module name by id
-  const getModulName = (modulId) => {
-    const modul = subjectModuls.find((m) => m._id === modulId);
-    return modul ? modul.title || modul.name : modulId;
-  };
-
-  // Group questions by module
+  // Own questions grouped by module, after the filters
   const questionsByModule = React.useMemo(() => {
-    const filtered = questions.filter((q) => {
-      let pass = true;
-      if (subjectId) {
-        pass = pass && subjectModuls.some((m) => m._id === q.modul);
-      }
-      if (filter.modulId) {
-        pass = pass && q.modul === filter.modulId;
-      }
-      if (filter.date) {
-        pass = pass && q.createdAt.slice(0, 10) === filter.date;
-      }
-      return pass;
-    });
-
     const grouped = {};
-    filtered.forEach((q) => {
-      if (!grouped[q.modul]) {
-        grouped[q.modul] = [];
-      }
+    questions.forEach((q) => {
+      if (filter.date && q.createdAt?.slice(0, 10) !== filter.date) return;
+      if (!grouped[q.modul]) grouped[q.modul] = [];
       grouped[q.modul].push(q);
     });
     return grouped;
-  }, [questions, subjectModuls, subjectId, filter]);
+  }, [questions, filter.date]);
 
-  // Helper to get validated questions for a module (restored Week 2 logic)
-  const getValidatedQuestionsForModule = React.useCallback(
-    (modulId) => {
-      if (!modulId) {
-        return [];
-      }
-
-      // Determine which questions to use based on filter
-      let availableQuestions = [];
-      if (filter.modulId) {
-        // Specific module selected - use currentModuleQuestions
-        if (modulId !== filter.modulId) {
-          return []; // Only show for the filtered module
-        }
-        availableQuestions = currentModuleQuestions;
-      } else {
-        // No module filter - use questions from all subject for this specific module
-        availableQuestions = allSubjectQuestions.filter((q) => q.modul === modulId);
-      }
-
-      // Always get/generate questions for validation (same logic as Week2.jsx)
-      let questions = [];
-      const stored = getWeekState(modulId, 2, 'selection');
-
-      const pool = availableQuestions.filter(
-        (q) => String(q.createdBy ?? q.created_by) !== String(userId)
-      );
-
-      if (stored && Array.isArray(stored) && stored.length > 0) {
-        // Try to restore questions in the same order as stored
-        questions = [];
-        const missingIndices = [];
-
-        stored.forEach((id, index) => {
-          const foundQuestion = pool.find((p) => String(p._id) === String(id));
-          if (foundQuestion) {
-            questions[index] = foundQuestion;
-          } else {
-            missingIndices.push(index);
-          }
-        });
-
-        // If some questions are missing, only replace those specific slots
-        if (missingIndices.length > 0) {
-          // Get questions not already selected
-          const usedIds = questions.filter(Boolean).map((q) => q._id);
-          const availablePool = pool.filter((q) => !usedIds.includes(q._id));
-
-          // Shuffle only the available pool
-          for (let i = availablePool.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [availablePool[i], availablePool[j]] = [availablePool[j], availablePool[i]];
-          }
-
-          // Fill missing slots
-          missingIndices.forEach((index, replacementIndex) => {
-            if (availablePool[replacementIndex]) {
-              questions[index] = availablePool[replacementIndex];
-            }
-          });
-
-          // Update storage with new selection (maintaining order)
-          const newStoredIds = questions.filter(Boolean).map((q) => q._id);
-          // Pad to ensure we have 2 items if needed
-          while (newStoredIds.length < 2 && availablePool[newStoredIds.length]) {
-            newStoredIds.push(availablePool[newStoredIds.length]._id);
-            questions.push(availablePool[newStoredIds.length - 1]);
-          }
-          saveWeekState(modulId, 2, 'selection', newStoredIds);
-        }
-
-        // Filter out any null/undefined entries and ensure we have up to 2 questions
-        questions = questions.filter(Boolean).slice(0, 2);
-      } else {
-        // No stored selection - create new random selection
-        for (let i = pool.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [pool[i], pool[j]] = [pool[j], pool[i]];
-        }
-        questions = pool.slice(0, 2);
-        if (questions.length > 0) {
-          saveWeekState(
-            modulId,
-            2,
-            'selection',
-            questions.map((q) => q._id)
-          );
-        }
-      }
-
-      return questions;
-    },
-    [
-      filter.modulId,
-      currentModuleQuestions,
-      allSubjectQuestions,
-      userId,
-      getWeekState,
-      saveWeekState
-    ]
+  // Show a module if the student wrote something in it or has reviews to do in it
+  const visibleModuls = React.useMemo(
+    () =>
+      subjectModuls.filter((m) => {
+        if (filter.modulId && m._id !== filter.modulId) return false;
+        const hasOwn = (questionsByModule[m._id] || []).length > 0;
+        const hasReviews = (m.current_phase ?? 0) >= 2 && !filter.date;
+        return hasOwn || hasReviews;
+      }),
+    [subjectModuls, questionsByModule, filter]
   );
+
+  const handlePublish = async (question) => {
+    try {
+      await publishQuestion(question._id).unwrap();
+      toast.success('Otázka bola publikovaná');
+    } catch (err) {
+      toast.error(err?.data?.message || 'Otázku sa nepodarilo publikovať');
+    }
+  };
 
   if (!subjectId) {
     return (
-      <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
+      <Box sx={pageSx}>
         <Typography variant="h4" sx={{ mb: 3 }}>
           Moje otázky
         </Typography>
@@ -284,36 +97,27 @@ const MyQuestions = () => {
       </Box>
     );
   }
-
   if (isLoading) {
     return (
-      <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
+      <Box sx={pageSx}>
         <Typography>Načítavam...</Typography>
       </Box>
     );
   }
   if (error) {
     return (
-      <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
+      <Box sx={pageSx}>
         <Typography color="error">Chyba pri načítaní otázok.</Typography>
-      </Box>
-    );
-  }
-  if (!questions.length) {
-    return (
-      <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
-        <Typography>Nemáte žiadne otázky.</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
+    <Box sx={pageSx}>
       <Typography variant="h4" sx={{ mb: 3 }}>
         Moje otázky
       </Typography>
 
-      {/* Filters */}
       <FilterControls
         currentSubject={currentSubject}
         filter={filter}
@@ -321,37 +125,28 @@ const MyQuestions = () => {
         subjectModuls={subjectModuls}
       />
 
-      {/* Debug controls disabled */}
-      {/*
-      <DebugWeekControls
-        debugWeekOverride={debugWeekOverride}
-        onWeekChange={setDebugWeekOverride}
-      />
-      */}
+      {visibleModuls.length === 0 && <Typography>Nemáte žiadne otázky.</Typography>}
 
-      {/* Questions grouped by module */}
-      {Object.entries(questionsByModule).map(([modulId, moduleQuestions], index) => {
-        const modul = subjectModuls.find((m) => m._id === modulId);
-        const currentWeek = getCurrentWeek(modul);
+      {visibleModuls.map((modul, index) => {
+        // 0 = not started, 1-3 = that week is running, 4 = finished (computed by the server)
+        const currentWeek = modul.current_phase ?? 0;
         const weekStatus =
           currentWeek === 0 ? 'Nezačalo' : currentWeek >= 4 ? 'Dokončené' : `Týždeň ${currentWeek}`;
 
-        const validatedQuestions = getValidatedQuestionsForModule(modulId);
-
         return (
           <ModuleQuestionsSection
-            key={modulId}
-            modulName={getModulName(modulId)}
+            key={modul._id}
+            modulId={modul._id}
+            modulName={modul.title || modul.name || modul._id}
             weekStatus={weekStatus}
-            moduleQuestions={moduleQuestions}
-            validatedQuestions={validatedQuestions}
+            moduleQuestions={questionsByModule[modul._id] || []}
             currentWeek={currentWeek}
             userId={userId}
             showDivider={index > 0}
             onValidate={
               currentWeek === 2
-                ? (q) => {
-                    setQuestionToValidate(q);
+                ? (item) => {
+                    setToValidate(item);
                     setValidateOpen(true);
                   }
                 : undefined
@@ -372,23 +167,22 @@ const MyQuestions = () => {
                   }
                 : undefined
             }
+            onPublish={currentWeek === 3 ? handlePublish : undefined}
           />
         );
       })}
 
       <ValidateQuestionModal
         open={validateOpen}
-        question={questionToValidate}
+        question={toValidate?.question}
+        assignment={toValidate?.assignment}
         onClose={() => setValidateOpen(false)}
         onSubmit={async (questionId, payload) => {
           try {
-            await validateQuestion({
-              questionId,
-              valid: payload.valid,
-              comment: payload.comment
-            }).unwrap();
-          } catch (error) {
-            console.error('Error submitting validation:', error);
+            await validateQuestion({ questionId, valid: payload.valid, comment: payload.comment }).unwrap();
+            toast.success('Recenzia bola uložená');
+          } catch (err) {
+            toast.error(err?.data?.message || 'Recenziu sa nepodarilo uložiť');
           }
         }}
       />
@@ -399,13 +193,10 @@ const MyQuestions = () => {
         onClose={() => setRespondOpen(false)}
         onSubmit={async (questionId, payload) => {
           try {
-            await respondToValidation({
-              questionId,
-              agreed: payload.agreed,
-              comment: payload.comment
-            }).unwrap();
-          } catch (error) {
-            console.error('Error submitting response:', error);
+            await respondToValidation({ questionId, agreed: payload.agreed, comment: payload.comment }).unwrap();
+            toast.success('Vyjadrenie bolo uložené');
+          } catch (err) {
+            toast.error(err?.data?.message || 'Vyjadrenie sa nepodarilo uložiť');
           }
         }}
       />
@@ -418,12 +209,7 @@ const MyQuestions = () => {
           setQuestionToEdit(null);
         }}
         onSubmit={async (questionId, updatedData) => {
-          try {
-            await updateQuestion({ questionId, ...updatedData }).unwrap();
-          } catch (error) {
-            console.error('Error updating question:', error);
-            throw error;
-          }
+          await updateQuestion({ questionId, ...updatedData }).unwrap();
         }}
       />
     </Box>

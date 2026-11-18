@@ -88,7 +88,7 @@ const EditQuestionModal = ({ open, question, onClose, onSubmit }) => {
       onClose();
     } catch (error) {
       console.error('Error updating question:', error);
-      toast.error('Chyba pri aktualizácii otázky');
+      toast.error(error?.data?.message || 'Chyba pri aktualizácii otázky');
     } finally {
       setIsSubmitting(false);
     }

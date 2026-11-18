@@ -2,7 +2,6 @@
 
 import * as authService from '@app/pages/auth/authService';
 import {
-  useBulkAssignQuestionsMutation,
   useGetQuestionsByModulQuery,
   useLazyGetModulsBySubjectQuery,
   useRespondToValidationMutation,
@@ -19,6 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import RespondToValidationModal from '../subjects/components/RespondToValidationModal';
 import ValidateQuestionModal from '../subjects/components/ValidateQuestionModal';
 import DefaultWeek from './components/weeks/DefaultWeek';
@@ -36,13 +36,9 @@ const Dashboard = () => {
   // RTK Query mutations for validation and responses
   const [validateQuestion] = useValidateQuestionMutation();
   const [respondToValidation] = useRespondToValidationMutation();
-  const [bulkAssignQuestions] = useBulkAssignQuestionsMutation();
 
   // localCreated stores newly created questions client-side until server returns them
   const [localCreated, setLocalCreated] = useState({}); // { modulId: { weekNumber: [questions] } }
-
-  // Track which modules have had assignments created
-  const [assignmentsCreatedFor, setAssignmentsCreatedFor] = useState(new Set());
 
   const auth = authService.getUserFromStorage();
   const userId = auth?.id || auth?._id || auth?.userId || null;
@@ -163,6 +159,16 @@ const Dashboard = () => {
     if (!modul) return [];
     const weeks = [];
 
+    // The server computes the phases and enforces them, so use its boundaries whenever it
+    // sends them. Its `end` is exclusive; subtract 1 ms so the last day is shown correctly.
+    if (Array.isArray(modul.phases) && modul.phases.length > 0) {
+      return modul.phases.map((p) => ({
+        weekNumber: p.number,
+        start: new Date(p.start).toISOString(),
+        end: new Date(new Date(p.end).getTime() - 1).toISOString()
+      }));
+    }
+
     try {
       const start = modul.date_start ? new Date(modul.date_start) : null;
       const end = modul.date_end ? new Date(modul.date_end) : null;
@@ -213,9 +219,10 @@ const Dashboard = () => {
     return weeks;
   };
 
+  // Exact comparison, the same way the server decides which week is running
   const isDateInRange = (date, start, end) => {
-    const d = new Date(date).setHours(0, 0, 0, 0);
-    return d >= new Date(start).setHours(0, 0, 0, 0) && d <= new Date(end).setHours(0, 0, 0, 0);
+    const t = new Date(date).getTime();
+    return t >= new Date(start).getTime() && t <= new Date(end).getTime();
   };
 
   const formatDate = (d) => {
@@ -231,38 +238,8 @@ const Dashboard = () => {
     return weeks.find((w) => isDateInRange(now, w.start, w.end)) || null;
   };
 
-  // Automatically trigger bulk assignment when transitioning to Week 2
-  useEffect(() => {
-    if (!selectedModul || !selectedModul._id) return;
-
-    const weeks = buildWeeks(selectedModul);
-    const now = new Date();
-    const currentWeek = getEffectiveCurrentWeek(weeks, now);
-
-    // If we're in Week 2 or later, and haven't created assignments yet
-    if (currentWeek && currentWeek.weekNumber >= 2) {
-      const moduleKey = selectedModul._id;
-
-      // Check if we already triggered for this module
-      if (!assignmentsCreatedFor.has(moduleKey)) {
-        bulkAssignQuestions(moduleKey)
-          .unwrap()
-          .then((result) => {
-            console.log('Bulk assignment successful:', result);
-            // Mark this module as having assignments created
-            setAssignmentsCreatedFor((prev) => new Set(prev).add(moduleKey));
-          })
-          .catch((error) => {
-            console.log('Bulk assignment response:', error);
-            // Even if it says "already exist", mark as created
-            if (error?.data?.message?.includes('already exist')) {
-              setAssignmentsCreatedFor((prev) => new Set(prev).add(moduleKey));
-            }
-          });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModul]);
+  // The questions for week 2 are dealt by the server when the week starts (see the backend
+  // job jobs/questionFlow.js). The browser no longer triggers or influences the deal.
 
   return (
     <Box sx={{ pt: { xs: 3, sm: 4 }, pb: { xs: 2, sm: 3 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
@@ -302,9 +279,9 @@ const Dashboard = () => {
             const renderWeek = (w, isCurrent) => {
               const status = isCurrent
                 ? 'Aktuálny týždeň'
-                : now < w.start
-                  ? 'Coming soon'
-                  : 'Completed';
+                : now < new Date(w.start)
+                  ? 'Ešte nezačal'
+                  : 'Ukončený';
 
               const commonProps = {
                 week: w,
@@ -460,10 +437,9 @@ const Dashboard = () => {
               comment: payload.comment
             }).unwrap();
 
-            // The RTK Query will automatically invalidate cache and refresh data
+            toast.success('Recenzia bola uložená');
           } catch (error) {
-            console.error('Error submitting validation:', error);
-            // In future: show toast / update UI
+            toast.error(error?.data?.message || 'Recenziu sa nepodarilo uložiť');
           }
         }}
       />
@@ -482,9 +458,9 @@ const Dashboard = () => {
               comment: payload.comment
             }).unwrap();
 
-            // The RTK Query will automatically invalidate cache and refresh data
+            toast.success('Vyjadrenie bolo uložené');
           } catch (error) {
-            console.error('Error submitting response:', error);
+            toast.error(error?.data?.message || 'Vyjadrenie sa nepodarilo uložiť');
           }
         }}
       />

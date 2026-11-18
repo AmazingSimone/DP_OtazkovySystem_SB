@@ -1,6 +1,7 @@
 import { useCurrentSubjectId } from '@app/hooks/useCurrentSubjectId';
 import * as authService from '@app/pages/auth/authService';
 import {
+  useGetPublishedQuestionsBySubjectQuery,
   useGetValidatedQuestionsWithAgreementBySubjectQuery,
   useLazyGetModulsBySubjectQuery,
   useTeacherValidateQuestionMutation
@@ -21,17 +22,43 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
+import { teacherStatusOf } from '@app/utils/questionFlowLabels';
 import QuestionCard from './components/QuestionCard';
 import ValidateByTeacherModal from './components/ValidateByTeacherModal';
 
+const STATUS_FILTERS = {
+  all: 'Všetky otázky',
+  pending: 'Čakajúce na posúdenie',
+  approved: 'Schválené',
+  rejected: 'Zamietnuté',
+  abuse: 'Zamietnuté ako zneužitie'
+};
+
+const REVIEW_FILTERS = {
+  all: 'Všetky recenzie',
+  student: 'Recenzované študentom',
+  missing_reviewer: 'Chýbajúci recenzent',
+  reviewer_no_response: 'Recenzent neodpovedal'
+};
+
+const SUCCESS_MESSAGES = {
+  approved: 'Otázka bola schválená',
+  rejected: 'Otázka bola zamietnutá',
+  abuse: 'Otázka bola zamietnutá ako zneužitie a body boli strhnuté'
+};
+
+/**
+ * The teacher's final review: questions that students published at the end of the three-week
+ * flow, plus questions written by teachers. Only approved questions are used in tests.
+ */
 const AllUsersQuestions = () => {
   const subjectId = useCurrentSubjectId();
   const [selectedModuleId, setSelectedModuleId] = useState('all');
-  const [teacherValidationFilter, setTeacherValidationFilter] = useState('all'); // 'all', 'validated', 'not-validated'
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [reviewFilter, setReviewFilter] = useState('all');
   const [createdByFilter, setCreatedByFilter] = useState('all'); // 'all', 'student', 'teacher'
-  const [selectedYear, setSelectedYear] = useState('all'); // Year filter
+  const [selectedYear, setSelectedYear] = useState('all');
 
-  // Teacher validation modal state
   const [validationModalOpen, setValidationModalOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [validationSubmitting, setValidationSubmitting] = useState(false);
@@ -40,31 +67,30 @@ const AllUsersQuestions = () => {
 
   const [teacherValidateQuestion] = useTeacherValidateQuestionMutation();
 
-  // Get current user to check if they are a teacher
   const currentUser = authService.getUserFromStorage();
   const isTeacher = currentUser?.isTeacher === true;
 
+  // Questions published by students at the end of week 3
   const {
-    data: questions = [],
-    isLoading: questionsLoading,
-    error: questionsError,
-    refetch: refetchQuestions
+    data: studentQuestions = [],
+    isLoading: studentLoading,
+    error: studentError
+  } = useGetPublishedQuestionsBySubjectQuery({ subjectId }, { skip: !subjectId });
+
+  // Questions written by teachers
+  const {
+    data: teacherQuestions = [],
+    isLoading: teacherLoading,
+    error: teacherError
   } = useGetValidatedQuestionsWithAgreementBySubjectQuery(
-    { subjectId, filter: createdByFilter },
-    {
-      skip: !subjectId
-    }
+    { subjectId, filter: 'teacher' },
+    { skip: !subjectId }
   );
 
-  // Fetch modules when subjectId changes
   useEffect(() => {
-    if (subjectId) {
-      trigger(subjectId);
-      refetchQuestions(); // Refetch questions when subject changes
-    }
-  }, [subjectId, trigger, refetchQuestions]);
+    if (subjectId) trigger(subjectId);
+  }, [subjectId, trigger]);
 
-  // Handle teacher validation modal
   const handleOpenValidationModal = (question) => {
     setSelectedQuestion(question);
     setValidationModalOpen(true);
@@ -79,19 +105,10 @@ const AllUsersQuestions = () => {
     setValidationSubmitting(true);
     try {
       await teacherValidateQuestion(data).unwrap();
-
-      // Show success message based on whether it's new validation or edit
-      if (selectedQuestion?.validated_by_teacher) {
-        toast.success('Validácia otázky bola úspešne upravená');
-      } else {
-        toast.success('Otázka bola úspešne validovaná');
-      }
-
+      toast.success(SUCCESS_MESSAGES[data.status] || 'Rozhodnutie bolo uložené');
       handleCloseValidationModal();
-      // The query will automatically refetch and update the UI
     } catch (error) {
-      console.error('Error submitting teacher validation:', error);
-      toast.error('Chyba pri validácii otázky. Skúste to prosím znova.');
+      toast.error(error?.data?.message || 'Rozhodnutie sa nepodarilo uložiť. Skúste to prosím znova.');
     } finally {
       setValidationSubmitting(false);
     }
@@ -100,49 +117,18 @@ const AllUsersQuestions = () => {
   if (!subjectId) {
     return (
       <Box sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 2, sm: 3 } }}>
-        <Alert severity="warning">
-          Prosím vyberte predmet pre zobrazenie otázok všetkých používateľov.
-        </Alert>
+        <Alert severity="warning">Prosím vyberte predmet pre zobrazenie otázok.</Alert>
       </Box>
     );
   }
 
-  // Filter questions by selected module and teacher validation
-  let filteredQuestions = questions;
-
-  // Filter by module
-  if (selectedModuleId !== 'all') {
-    filteredQuestions = filteredQuestions.filter((q) => q.modul._id === selectedModuleId);
-  }
-
-  // Filter by teacher validation
-  if (teacherValidationFilter === 'validated') {
-    filteredQuestions = filteredQuestions.filter((q) => q.validated_by_teacher === true);
-  } else if (teacherValidationFilter === 'not-validated') {
-    filteredQuestions = filteredQuestions.filter((q) => q.validated_by_teacher !== true);
-  }
-
-  // Filter by year
-  if (selectedYear !== 'all') {
-    filteredQuestions = filteredQuestions.filter((q) => {
-      const questionYear = new Date(q.createdAt).getFullYear();
-      return questionYear === parseInt(selectedYear);
-    });
-  }
-
-  // Get available years from questions for the year filter
-  const availableYears = Array.from(
-    new Set(
-      questions.map((q) => new Date(q.createdAt).getFullYear()).filter((year) => !isNaN(year))
-    )
-  ).sort((a, b) => b - a); // Sort descending (newest first)
-
-  // Get questions that need teacher validation for the floating button
-
+  const questionsError = studentError || teacherError;
   if (questionsError) {
     return (
       <Box sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 2, sm: 3 } }}>
-        <Alert severity="error">Chyba pri načítaní otázok: {questionsError.message}</Alert>
+        <Alert severity="error">
+          Chyba pri načítaní otázok: {questionsError?.data?.message || questionsError.message}
+        </Alert>
       </Box>
     );
   }
@@ -155,22 +141,51 @@ const AllUsersQuestions = () => {
     );
   }
 
+  const questions =
+    createdByFilter === 'student'
+      ? studentQuestions
+      : createdByFilter === 'teacher'
+        ? teacherQuestions
+        : [...studentQuestions, ...teacherQuestions];
+
+  const filteredQuestions = questions.filter((q) => {
+    if (selectedModuleId !== 'all' && q.modul?._id !== selectedModuleId) return false;
+    if (statusFilter !== 'all' && teacherStatusOf(q) !== statusFilter) return false;
+    if (reviewFilter === 'student' && !(q.published && !q.review_tag)) return false;
+    if (reviewFilter !== 'all' && reviewFilter !== 'student' && q.review_tag !== reviewFilter) return false;
+    if (selectedYear !== 'all' && new Date(q.createdAt).getFullYear() !== parseInt(selectedYear)) {
+      return false;
+    }
+    return true;
+  });
+
+  const availableYears = Array.from(
+    new Set(questions.map((q) => new Date(q.createdAt).getFullYear()).filter((year) => !isNaN(year)))
+  ).sort((a, b) => b - a);
+
+  const questionsLoading = studentLoading || teacherLoading;
+
   return (
     <Box sx={{ pb: { xs: 2, sm: 3 }, pt: { xs: 3, sm: 4 }, px: { xs: 1.5, sm: 2, md: 0 } }}>
       <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
-        Validované otázky všetkých používateľov
+        Publikované otázky na posúdenie
       </Typography>
+      <Typography color="textSecondary" sx={{ mb: 2 }}>
+        Otázky, ktoré študenti publikovali po recenzii, a otázky vytvorené učiteľmi. Do testov sa
+        dostanú iba schválené otázky.
+      </Typography>
+
       {/* Filters */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={{ xs: 2, sm: 3 }}>
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid item xs={12} sm={6} lg={2.4}>
               <FormControl fullWidth>
-                <InputLabel>Filtrovať podľa modulu</InputLabel>
+                <InputLabel>Modul</InputLabel>
                 <Select
                   value={selectedModuleId}
                   onChange={(e) => setSelectedModuleId(e.target.value)}
-                  label="Filtrovať podľa modulu"
+                  label="Modul"
                   disabled={modulesLoading}
                 >
                   <MenuItem value="all">Všetky moduly</MenuItem>
@@ -183,7 +198,7 @@ const AllUsersQuestions = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid item xs={12} sm={6} lg={2.4}>
               <FormControl fullWidth>
                 <InputLabel>Vytvorené</InputLabel>
                 <Select
@@ -198,22 +213,41 @@ const AllUsersQuestions = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid item xs={12} sm={6} lg={2.4}>
               <FormControl fullWidth>
-                <InputLabel>Stav validácie učiteľom</InputLabel>
+                <InputLabel>Rozhodnutie učiteľa</InputLabel>
                 <Select
-                  value={teacherValidationFilter}
-                  onChange={(e) => setTeacherValidationFilter(e.target.value)}
-                  label="Stav validácie učiteľom"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  label="Rozhodnutie učiteľa"
                 >
-                  <MenuItem value="all">Všetky otázky</MenuItem>
-                  <MenuItem value="validated">Validované učiteľom</MenuItem>
-                  <MenuItem value="not-validated">Nevalidované učiteľom</MenuItem>
+                  {Object.entries(STATUS_FILTERS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid item xs={12} sm={6} lg={2.4}>
+              <FormControl fullWidth>
+                <InputLabel>Recenzia</InputLabel>
+                <Select
+                  value={reviewFilter}
+                  onChange={(e) => setReviewFilter(e.target.value)}
+                  label="Recenzia"
+                >
+                  {Object.entries(REVIEW_FILTERS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={2.4}>
               <FormControl fullWidth>
                 <InputLabel>Rok vytvorenia</InputLabel>
                 <Select
@@ -235,21 +269,23 @@ const AllUsersQuestions = () => {
         </CardContent>
       </Card>
 
-      {/* Loading State */}
       {(questionsLoading || modulesLoading) && (
         <Box display="flex" justifyContent="center" py={{ xs: 3, sm: 4 }}>
           <CircularProgress />
         </Box>
       )}
 
-      {/* Questions List */}
       {!questionsLoading && !modulesLoading && (
         <>
           <Box display="flex" alignItems="center" gap={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
             <Typography variant="h6">Nájdených {filteredQuestions.length} otázok</Typography>
             {selectedModuleId !== 'all' && (
               <Chip
-                label={modules.find((m) => m._id === selectedModuleId)?.name || 'Neznámy modul'}
+                label={
+                  modules.find((m) => m._id === selectedModuleId)?.title ||
+                  modules.find((m) => m._id === selectedModuleId)?.name ||
+                  'Neznámy modul'
+                }
                 size="small"
               />
             )}
@@ -260,16 +296,11 @@ const AllUsersQuestions = () => {
                 color="info"
               />
             )}
-            {teacherValidationFilter !== 'all' && (
-              <Chip
-                label={
-                  teacherValidationFilter === 'validated'
-                    ? 'Validované učiteľom'
-                    : 'Nevalidované učiteľom'
-                }
-                size="small"
-                color={teacherValidationFilter === 'validated' ? 'primary' : 'warning'}
-              />
+            {statusFilter !== 'all' && (
+              <Chip label={STATUS_FILTERS[statusFilter]} size="small" color="primary" />
+            )}
+            {reviewFilter !== 'all' && (
+              <Chip label={REVIEW_FILTERS[reviewFilter]} size="small" color="warning" />
             )}
             {selectedYear !== 'all' && (
               <Chip label={`Rok: ${selectedYear}`} size="small" color="secondary" />
@@ -280,12 +311,10 @@ const AllUsersQuestions = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" color="textSecondary" align="center">
-                  Neboli nájdené žiadne validované otázky so súhlasom používateľa.
+                  Neboli nájdené žiadne otázky.
                 </Typography>
                 <Typography color="textSecondary" align="center" sx={{ mt: 1 }}>
-                  {selectedModuleId === 'all'
-                    ? 'Neexistujú žiadne otázky, ktoré boli validované a odsúhlasené používateľmi.'
-                    : 'V zvolenom module nie sú žiadne validované otázky so súhlasom používateľa.'}
+                  Študentské otázky sa tu objavia, keď ich autori v 3. týždni modulu publikujú.
                 </Typography>
               </CardContent>
             </Card>
@@ -305,7 +334,6 @@ const AllUsersQuestions = () => {
         </>
       )}
 
-      {/* Teacher Validation Modal */}
       <ValidateByTeacherModal
         open={validationModalOpen}
         onClose={handleCloseValidationModal}

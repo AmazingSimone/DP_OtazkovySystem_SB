@@ -1,24 +1,62 @@
+import { REVIEW_TAG_LABELS } from '@app/utils/questionFlowLabels';
 import { Box, Button, Card, CardContent, Chip, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 
+const Options = ({ question }) => (
+  <Box sx={{ mb: 2 }}>
+    {question.options &&
+      Object.entries(question.options).map(([key, value]) => (
+        <Typography
+          key={key}
+          variant="body2"
+          sx={{
+            color: key === question.correct ? 'success.dark' : 'text.secondary',
+            fontWeight: key === question.correct ? 600 : 400,
+            ml: 1,
+            mb: 0.5
+          }}
+        >
+          {key.toUpperCase()}) {value} {key === question.correct && '✓'}
+        </Typography>
+      ))}
+  </Box>
+);
+
+Options.propTypes = {
+  question: PropTypes.shape({ options: PropTypes.object, correct: PropTypes.string }).isRequired
+};
+
+const hoverSx = (enabled) =>
+  enabled
+    ? {
+        backgroundColor: (theme) =>
+          theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'action.hover'
+      }
+    : {};
+
+/**
+ * One question on the "Moje otázky" page.
+ *
+ * With `assignment` it is a question dealt to the student for review in week 2 (anonymous,
+ * verdict stored on the assignment). Without it, it is the student's own question.
+ */
 const QuestionCard = ({
   question,
+  assignment = null,
   currentWeek,
-  isValidatedByUser = false,
-  userId,
   onValidate,
   onRespond,
-  onEdit
+  onEdit,
+  onPublish
 }) => {
-  const isInWeek3OrLater = currentWeek >= 3;
-  const isWeek3 = currentWeek === 3;
-  const isWeek2 = currentWeek === 2;
   const isWeek1 = currentWeek === 1;
+  const isWeek2 = currentWeek === 2;
+  const isWeek3 = currentWeek === 3;
 
-  // For Week 2 validation questions, use different styling and behavior
-  if (isValidatedByUser) {
-    const validated = question.validated_by && String(question.validated_by) === String(userId);
-    const canValidateInWeek2 = isWeek2 && !!onValidate;
+  // A question the student reviews
+  if (assignment) {
+    const reviewed = Boolean(assignment.validated);
+    const canReview = isWeek2 && !!onValidate;
 
     return (
       <Card
@@ -26,232 +64,180 @@ const QuestionCard = ({
           borderRadius: 2,
           height: 'fit-content',
           border: '1px solid',
-          borderColor: validated ? 'success.main' : 'grey.300',
-          bgcolor: validated ? 'success.50' : 'transparent',
-          cursor: canValidateInWeek2 ? 'pointer' : 'default',
-          '&:hover': !canValidateInWeek2
-            ? {}
-            : {
-                backgroundColor: (theme) =>
-                  theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'action.hover'
-              }
+          borderColor: reviewed ? 'success.main' : 'grey.300',
+          bgcolor: reviewed ? 'success.50' : 'transparent',
+          cursor: canReview ? 'pointer' : 'default',
+          '&:hover': hoverSx(canReview)
         }}
         onClick={() => {
-          if (canValidateInWeek2 && onValidate) {
-            onValidate(question);
-          }
+          if (canReview) onValidate({ question, assignment });
         }}
       >
         <CardContent>
           <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
             {question.text}
           </Typography>
+          <Options question={question} />
 
-          {/* Answer options */}
-          <Box sx={{ mb: 2 }}>
-            {question.options &&
-              Object.entries(question.options).map(([key, value]) => (
-                <Typography
-                  key={key}
-                  variant="body2"
-                  sx={{
-                    color: 'text.secondary',
-                    ml: 1,
-                    mb: 0.5
-                  }}
-                >
-                  {key.toUpperCase()}) {value}
-                </Typography>
-              ))}
-          </Box>
-
-          {/* Show validation status if already validated */}
-          {validated && (
+          {reviewed && (
             <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                <Chip
-                  label={question.validated ? 'Validná' : 'Nevalidná'}
-                  color={question.validated ? 'success' : 'error'}
-                  size="small"
-                />
-              </Box>
-              {question.validation_comment && (
+              <Chip
+                label={assignment.validation_result ? 'Validná' : 'Chybná'}
+                color={assignment.validation_result ? 'success' : 'error'}
+                size="small"
+              />
+              {assignment.validation_comment && (
                 <Typography
                   variant="body2"
                   sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary' }}
                 >
-                  Komentár: {question.validation_comment}
+                  Komentár: {assignment.validation_comment}
                 </Typography>
               )}
             </Box>
           )}
 
-          {/* Creation date */}
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-            Vytvorené: {new Date(question.createdAt).toLocaleDateString()}
-            {canValidateInWeek2 && (
-              <span>
-                {' '}
-                • {validated ? 'Kliknite pre zmenu validácie' : 'Kliknite pre validáciu'}
-              </span>
-            )}
-          </Typography>
+          {canReview && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+              {reviewed ? 'Kliknite pre zmenu recenzie' : 'Kliknite pre recenziu'}
+            </Typography>
+          )}
         </CardContent>
       </Card>
     );
   }
 
-  // Original rendering for user's own questions
-  const responded = question.user_agreement;
-  const hasValidation = question.validated_by !== undefined && question.validated_by !== null;
-  const canRespondInWeek3 = isWeek3 && hasValidation && !!onRespond;
-  const canEditNow = !!onEdit;
-  const canEditByClickInWeek1 = isWeek1 && canEditNow;
+  // The student's own question
+  const hasReview = Boolean(question.validated_at);
+  const responded = question.user_agreement?.responded_at ? question.user_agreement : null;
+  const isFault = hasReview && question.validated === false;
+  const published = Boolean(question.published);
+  const tagLabel = REVIEW_TAG_LABELS[question.review_tag];
+
+  const canRespond = isWeek3 && hasReview && !published && !!onRespond;
+  // Week 1: any own question. Week 3: only one reviewed as faulty and not yet published.
+  const canEdit = !!onEdit && (isWeek1 || (isWeek3 && isFault && !published));
+  const canPublish = isWeek3 && hasReview && !published && !!onPublish;
+  const clickable = (isWeek1 && canEdit) || canRespond;
 
   return (
     <Card
       sx={{
         borderRadius: 2,
         height: 'fit-content',
-        border: isWeek3 ? '1px solid' : undefined,
-        borderColor: isWeek3
-          ? responded
-            ? 'success.main'
-            : hasValidation
-              ? 'warning.main'
-              : '#000000'
-          : undefined,
-        bgcolor: isWeek3
-          ? responded
-            ? 'success.50'
-            : hasValidation
-              ? 'warning.50'
-              : 'transparent'
-          : undefined,
-        cursor: canEditByClickInWeek1 || canRespondInWeek3 ? 'pointer' : 'default',
-        '&:hover':
-          canEditByClickInWeek1 || canRespondInWeek3
-            ? {
-                backgroundColor: (theme) =>
-                  theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'action.hover'
-              }
-            : {}
+        border: currentWeek >= 3 ? '1px solid' : undefined,
+        borderColor:
+          currentWeek >= 3
+            ? published
+              ? 'success.main'
+              : hasReview
+                ? 'warning.main'
+                : 'grey.400'
+            : undefined,
+        bgcolor:
+          currentWeek >= 3 ? (published ? 'success.50' : hasReview ? 'warning.50' : 'transparent') : undefined,
+        cursor: clickable ? 'pointer' : 'default',
+        '&:hover': hoverSx(clickable)
       }}
       onClick={() => {
-        if (canEditByClickInWeek1 && onEdit) {
+        if (isWeek1 && canEdit) {
           onEdit(question);
           return;
         }
-
-        if (canRespondInWeek3 && onRespond) {
-          onRespond(question);
-        }
+        if (canRespond) onRespond(question);
       }}
     >
       <CardContent>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
           {question.text}
         </Typography>
+        <Options question={question} />
 
-        {/* Answer options */}
-        <Box sx={{ mb: 2 }}>
-          {question.options &&
-            Object.entries(question.options).map(([key, value]) => (
-              <Typography
-                key={key}
-                variant="body2"
-                sx={{
-                  color: key === question.correct ? 'success.dark' : 'text.secondary',
-                  fontWeight: key === question.correct ? 600 : 400,
-                  ml: 1,
-                  mb: 0.5
-                }}
-              >
-                {key.toUpperCase()}) {value} {key === question.correct && '✓'}
-              </Typography>
-            ))}
-        </Box>
-
-        {/* Week 3+ content - show validation status and feedback for own questions */}
-        {!isValidatedByUser && isInWeek3OrLater && (
+        {/* The review is shown from week 3 on; the server does not send it earlier */}
+        {currentWeek >= 3 && (
           <Box sx={{ mt: 2 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-              {/* Validation status */}
-              {hasValidation ? (
+              {hasReview ? (
                 <Chip
-                  label={question.validated ? 'Validná' : 'Nevalidná'}
+                  label={question.validated ? 'Recenzia: validná' : 'Recenzia: chybná'}
                   color={question.validated ? 'success' : 'error'}
                   size="small"
                 />
               ) : (
+                <Chip label="Bez recenzie" size="small" variant="outlined" />
+              )}
+              {tagLabel && <Chip label={tagLabel} color="warning" size="small" variant="outlined" />}
+              {responded && (
                 <Chip
-                  label="Nevalidovaná"
+                  label={responded.agreed ? 'Súhlasím s recenziou' : 'Nesúhlasím s recenziou'}
+                  color={responded.agreed ? 'success' : 'warning'}
                   size="small"
-                  sx={{
-                    backgroundColor: '#000000',
-                    color: 'white',
-                    '&:hover': {
-                      backgroundColor: '#333333'
-                    }
-                  }}
+                  variant="outlined"
                 />
               )}
-
-              {/* User agreement status */}
-              {question.user_agreement && (
-                <Chip
-                  label={question.user_agreement.agreed ? 'Súhlasím' : 'Nesúhlasím'}
-                  color={question.user_agreement.agreed ? 'success' : 'warning'}
-                  size="small"
-                />
-              )}
+              {published && <Chip label="Publikovaná" color="success" size="small" />}
             </Box>
 
-            {/* Validation comment */}
-            {question.validation_comment && (
-              <Typography
-                variant="body2"
-                sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary' }}
-              >
-                Validačný komentár: {question.validation_comment}
+            {hasReview && question.validation_comment && (
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary' }}>
+                Komentár recenzie: {question.validation_comment}
               </Typography>
             )}
-
-            {/* User's response */}
-            {question.user_agreement && question.user_agreement.comment && (
-              <Typography
-                variant="body2"
-                sx={{ mt: 1, fontStyle: 'italic', color: 'text.primary' }}
-              >
-                Tvoja odpoveď: {question.user_agreement.comment}
+            {responded && responded.comment && (
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.primary' }}>
+                Tvoja odpoveď: {responded.comment}
               </Typography>
             )}
           </Box>
         )}
 
-        {canEditNow && (
-          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              size="small"
-              variant="outlined"
-              color="primary"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(question);
-              }}
-            >
-              Upraviť
-            </Button>
+        {(canEdit || canRespond || canPublish) && (
+          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {canRespond && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRespond(question);
+                }}
+              >
+                {responded ? 'Zmeniť vyjadrenie' : 'Vyjadriť sa k recenzii'}
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(question);
+                }}
+              >
+                {isWeek3 ? 'Opraviť otázku' : 'Upraviť'}
+              </Button>
+            )}
+            {canPublish && (
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!responded}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPublish(question);
+                }}
+              >
+                Publikovať
+              </Button>
+            )}
           </Box>
         )}
 
-        {/* Creation date */}
         <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
           Vytvorené: {new Date(question.createdAt).toLocaleDateString()}
-          {isWeek1 && canEditNow && <span> • Kliknite pre úpravu otázky</span>}
-          {canRespondInWeek3 && (
-            <span> • {responded ? 'Kliknite pre úpravu odpovede' : 'Kliknite pre odpoveď'}</span>
-          )}
+          {isWeek1 && canEdit && <span> • Kliknite pre úpravu otázky</span>}
+          {canPublish && !responded && <span> • Najprv sa vyjadri k recenzii, potom publikuj</span>}
+          {published && <span> • Čaká na posúdenie učiteľom</span>}
         </Typography>
       </CardContent>
     </Card>
@@ -264,21 +250,28 @@ QuestionCard.propTypes = {
     text: PropTypes.string.isRequired,
     options: PropTypes.object.isRequired,
     correct: PropTypes.string,
-    validated_by: PropTypes.string,
     validated: PropTypes.bool,
+    validated_at: PropTypes.string,
     validation_comment: PropTypes.string,
+    review_tag: PropTypes.string,
+    published: PropTypes.bool,
     user_agreement: PropTypes.shape({
       agreed: PropTypes.bool,
-      comment: PropTypes.string
+      comment: PropTypes.string,
+      responded_at: PropTypes.string
     }),
-    createdAt: PropTypes.string.isRequired
+    createdAt: PropTypes.string
   }).isRequired,
+  assignment: PropTypes.shape({
+    validated: PropTypes.bool,
+    validation_result: PropTypes.bool,
+    validation_comment: PropTypes.string
+  }),
   currentWeek: PropTypes.number.isRequired,
-  isValidatedByUser: PropTypes.bool,
-  userId: PropTypes.string.isRequired,
   onValidate: PropTypes.func,
   onRespond: PropTypes.func,
-  onEdit: PropTypes.func
+  onEdit: PropTypes.func,
+  onPublish: PropTypes.func
 };
 
 export default QuestionCard;

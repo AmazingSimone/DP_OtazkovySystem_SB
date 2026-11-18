@@ -398,16 +398,46 @@ export const api = createApi({
         'Points'
       ]
     }),
+    // Week 3: the author sends the question to the teacher (the only step that earns the point)
+    publishQuestion: builder.mutation({
+      query: (questionId) => ({
+        url: `/question/${questionId}/publish`,
+        method: 'POST'
+      }),
+      invalidatesTags: (result, error, questionId) => [
+        { type: 'Questions', id: questionId },
+        'Questions',
+        'Points'
+      ]
+    }),
+    // Teacher decision: { status: 'approved' | 'rejected' | 'abuse', comment, extraPenalty }.
+    // The older { validated_by_teacher, validated_by_teacher_comment } shape is still accepted.
     teacherValidateQuestion: builder.mutation({
-      query: ({ questionId, validated_by_teacher, validated_by_teacher_comment }) => ({
+      query: ({ questionId, ...body }) => ({
         url: `/question/${questionId}/teacher-validate`,
         method: 'POST',
-        body: { validated_by_teacher, validated_by_teacher_comment }
+        body
       }),
       invalidatesTags: (result, error, { questionId }) => [
         { type: 'Questions', id: questionId },
-        'Questions'
+        'Questions',
+        'Points'
       ]
+    }),
+    // Teacher: published student questions of a subject, with optional filters
+    getPublishedQuestionsBySubject: builder.query({
+      query: ({ subjectId, ...filters }) => {
+        const params = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') params.append(key, value);
+        });
+        const query = params.toString();
+        return {
+          url: `/question/subject/${subjectId}/published${query ? `?${query}` : ''}`,
+          method: 'GET'
+        };
+      },
+      providesTags: ['Questions']
     }),
     updateQuestion: builder.mutation({
       query: ({ questionId, ...data }) => ({
@@ -1286,7 +1316,9 @@ export const {
   useDeleteQuestionMutation,
   useValidateQuestionMutation,
   useRespondToValidationMutation,
+  usePublishQuestionMutation,
   useTeacherValidateQuestionMutation,
+  useGetPublishedQuestionsBySubjectQuery,
   useUpdateQuestionMutation,
   useGetQuestionsBySubjectIdQuery,
   useLazyGetQuestionsBySubjectIdQuery,
