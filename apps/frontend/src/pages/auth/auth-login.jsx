@@ -21,21 +21,25 @@ export const AuthPage = () => {
     event.preventDefault();
     const email = event.target.email.value.trim();
     const password = event.target.password.value.trim();
-    let response;
-    if (email.endsWith('@uniza.sk')) {
-      response = await loginTeacher({ email, password });
-    } else if (email.endsWith('@stud.uniza.sk')) {
-      response = await loginUser({ email, password });
-    } else {
-      response = await loginUser({ email, password }); // fallback to user
+    // Staff addresses sign in as teachers, everything else as students.
+    let isTeacher = email.endsWith('@uniza.sk');
+    let response = isTeacher
+      ? await loginTeacher({ email, password })
+      : await loginUser({ email, password });
+    if (response.error && isTeacher) {
+      // A student account can also have a staff-style address (for example test accounts),
+      // so try the student sign-in before giving up.
+      const asStudent = await loginUser({ email, password });
+      if (!asStudent.error) {
+        response = asStudent;
+        isTeacher = false;
+      }
     }
     if (!response.error) {
       authService.saveTokenToStorage(response.data.token);
       let me;
-      let isTeacher = false;
-      if (email.endsWith('@uniza.sk')) {
+      if (isTeacher) {
         me = await triggerTeacherMe().unwrap();
-        isTeacher = true;
         // Try to get fullName from response or fallback to name + surname
         let teacherFullName =
           me.fullName || (me.name && me.surname ? `${me.name} ${me.surname}` : undefined);
