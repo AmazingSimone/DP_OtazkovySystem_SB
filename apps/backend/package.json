@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "migrate:user-academic-profile": "node scripts/runUserAcademicProfileMigration.js"
+    "migrate:user-academic-profile": "node scripts/runUserAcademicProfileMigration.js",
+    "test:questions": "jest --runInBand --forceExit src/util/__test__ src/services/__test__ src/routes/__test__/questionFlow"
   },
   "keywords": [],
   "author": "",

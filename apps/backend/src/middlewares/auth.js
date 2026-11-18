@@ -22,14 +22,17 @@ const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.TOKEN_KEY);
     // Try to find user in User collection
     let user = await User.findById(decoded.user_id);
+    let isTeacherAccount = false;
     if (!user) {
       // Try to find user in Teacher collection
       user = await Teacher.findById(decoded.user_id);
+      isTeacherAccount = !!user;
     }
     if (!user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    req.user = { user_id: user._id };
+    // is_teacher tells handlers which collection the account lives in (students vs teachers)
+    req.user = { user_id: user._id, is_teacher: isTeacherAccount };
     if (req.url.includes("/admin")) {
       // Check if user is from Teacher collection (all teachers have admin access for now)
       const isTeacher = await Teacher.findById(decoded.user_id);

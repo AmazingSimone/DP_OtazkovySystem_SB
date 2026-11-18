@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const mongoose = require('mongoose');
 const Teacher = require('./src/models/teacher');
 const { backfillUserAcademicProfile } = require('./src/migrations/backfillUserAcademicProfile');
+const { scheduleQuestionFlow } = require('./src/jobs/questionFlow');
 
 const app = require('./app');
 
@@ -44,6 +45,7 @@ const start = async () => {
         const migrationResult = await backfillUserAcademicProfile();
         console.log('User academic profile migration finished:', migrationResult);
         await createDefaultUser();
+        scheduleQuestionFlow();
 
         app.listen(5000, () => {
             console.log(`Listening at http://localhost:5000`);

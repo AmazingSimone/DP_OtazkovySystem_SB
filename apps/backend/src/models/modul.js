@@ -1,4 +1,5 @@
 const mongoose = require("mongoose")
+const { getPhases, getCurrentPhase } = require("../util/modulePhase")
 
 const ModuleSchema = new mongoose.Schema(
     {
@@ -35,6 +36,9 @@ const ModuleSchema = new mongoose.Schema(
         },
         is_active: { type: Boolean, default: true },
         required_questions_per_user: { type: Number, default: 2 }, // Configurable per module
+        // Question flow bookkeeping, each set exactly once by the server:
+        review_dealt_at: { type: Date, default: null }, // week 2 reviews were dealt
+        review_closed_at: { type: Date, default: null }, // week 3 started, unanswered reviews were closed
     },
     {
         timestamps: true,
@@ -51,6 +55,14 @@ ModuleSchema.index({ createdBy: 1 })
 // Virtual for duration
 ModuleSchema.virtual("duration_days").get(function () {
     return Math.ceil((this.date_end - this.date_start) / (1000 * 60 * 60 * 24))
+})
+
+// Phases of the question flow, computed on the server so every client agrees on them
+ModuleSchema.virtual("phases").get(function () {
+    return getPhases(this)
+})
+ModuleSchema.virtual("current_phase").get(function () {
+    return getCurrentPhase(this)
 })
 
 // Virtual for questions

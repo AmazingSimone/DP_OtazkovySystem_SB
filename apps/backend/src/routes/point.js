@@ -7,13 +7,17 @@ router.get("/user/:userId", pointController.getUserPoints);
 router.get("/user/:userId/summary", pointController.getUserPointsSummary);
 router.post("/users/summary", pointController.getUsersPointsSummary);
 
-// Award points routes - Only available to teachers
-// Week 1 - Question Creation
-router.post("/award/week1", pointController.awardPointsForQuestionCreation);
-// Week 2 - Question Validation
-router.post("/award/week2", pointController.awardPointsForQuestionValidation);
-// Week 3 - Question Reparation
-router.post("/award/week3", pointController.awardPointsForQuestionReparation);
+// The three batch award endpoints are retired. Points for the question flow are awarded at the
+// moment a student creates, reviews or publishes a question, and awarding them again in bulk
+// would break the rules of the three weeks (see services/questionFlow.js).
+const retired = (req, res) =>
+    res.status(410).json({
+        success: false,
+        message: "Points for questions are awarded automatically; this endpoint is no longer available.",
+    });
+router.post("/award/week1", retired);
+router.post("/award/week2", retired);
+router.post("/award/week3", retired);
 // Custom points
 router.post("/award/custom", pointController.awardCustomPoints);
 

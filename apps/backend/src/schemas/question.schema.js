@@ -12,7 +12,7 @@ const createQuestionSchema = Joi.object({
     }).required(),
     correct: Joi.string().valid('a', 'b', 'c', 'd').required(),
     modul: objectId.required(),
-    createdBy: objectId.required(),
+    createdBy: objectId,
     createdByName: Joi.string().allow(null).optional(),
     validated: Joi.boolean(),
     validated_by: objectId,

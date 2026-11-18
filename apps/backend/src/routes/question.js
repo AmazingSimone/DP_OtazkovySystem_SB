@@ -3,44 +3,57 @@ const {
     createQuestion,
     editQuestion,
     deleteQuestion,
+} = require("../controllers/questionFlowController");
+
+const {
     getAllQuestions,
     getQuestionById,
     getQuestionsByModuleId,
     getQuestionsBySubjectId,
     getQuestionByUserId,
-    validateQuestion,
-    respondToValidation,
-    getValidatedQuestionsWithAgreementBySubject,
-    teacherValidateQuestion
-} = require("../controllers/questionController");
+} = require("../controllers/questionReadController");
 
 const {
+    getQuestionAssignmentsByUser,
+    reviewQuestion,
+    respondToReview,
+    publishQuestion,
+    syncModuleNow,
+} = require("../controllers/questionReviewController");
 
-    getAssignmentStats,
-    bulkAssignQuestionsForModule,
-    getQuestionAssignmentsByUser
-} = require("../controllers/questionAssignmentController");
+const {
+    getPublishedQuestionsBySubject,
+    teacherReviewQuestion,
+} = require("../controllers/questionTeacherController");
+
+const { getValidatedQuestionsWithAgreementBySubject } = require("../controllers/questionController");
+const { getAssignmentStats } = require("../controllers/questionAssignmentController");
 
 const router = express.Router();
 
+// Reading
+router.get("/subject/:subjectId", getQuestionsBySubjectId);
+router.get("/subject/:subjectId/published", getPublishedQuestionsBySubject); // teacher: questions waiting for final review
+router.get("/subject/:subjectId/validated-with-agreement", getValidatedQuestionsWithAgreementBySubject);
+router.get("/module/:moduleId", getQuestionsByModuleId);
+router.get("/user/:userId", getQuestionByUserId);
 
-router.get("/subject/:subjectId", getQuestionsBySubjectId); // Get questions by subject ID
-router.get("/subject/:subjectId/validated-with-agreement", getValidatedQuestionsWithAgreementBySubject); // Get validated questions with user agreement
-router.get("/module/:moduleId", getQuestionsByModuleId);    // Get questions by module ID
-router.get("/user/:userId", getQuestionByUserId);          // Get questions by user ID
-router.get("/:id", getQuestionById);                        // Get a question by ID
-router.get("/", getAllQuestions);                           // Get all questions
-router.post("/", createQuestion);                           // Create a new question
-router.put("/:id", editQuestion);                           // Edit a question by ID
-router.delete("/:id", deleteQuestion);                      // Delete a question by ID
+// Week 2: questions dealt to a student for review
+router.post("/assignments/bulk/:modulId", syncModuleNow); // legacy trigger, now only syncs the module
+router.get("/assignments/stats/:modulId", getAssignmentStats);
+router.get("/assignments/:userId/:modulId", getQuestionAssignmentsByUser);
 
-// Week 2 & 3 functionality
-router.post("/:id/validate", validateQuestion);             // Validate a question (Week 2)
-router.post("/:id/respond", respondToValidation);           // Respond to validation (Week 3)
-router.post("/:id/teacher-validate", teacherValidateQuestion); // Teacher validate a question
+router.get("/:id", getQuestionById);
+router.get("/", getAllQuestions);
 
-// Question assignments for Week 2
-router.post("/assignments/bulk/:modulId", bulkAssignQuestionsForModule); // Bulk assign all questions for module
-router.get("/assignments/stats/:modulId", getAssignmentStats);       // Get assignment statistics
-router.get("/assignments/:userId/:modulId", getQuestionAssignmentsByUser); // GET assignments for user in module - ADD THIS
+// Week 1: creating, and correcting where the rules allow it
+router.post("/", createQuestion);
+router.put("/:id", editQuestion);
+router.delete("/:id", deleteQuestion);
+
+router.post("/:id/validate", reviewQuestion);                 // week 2: review an assigned question
+router.post("/:id/respond", respondToReview);                 // week 3: author answers the review
+router.post("/:id/publish", publishQuestion);                 // week 3: author sends it to the teacher
+router.post("/:id/teacher-validate", teacherReviewQuestion);  // teacher: approve, reject, reject as abuse
+
 module.exports = router;

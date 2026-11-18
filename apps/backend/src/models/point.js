@@ -33,6 +33,7 @@ const PointSchema = new mongoose.Schema(
                 "test_performance",
                 "forum_participation",
                 "project_work",
+                "question_penalty", // negative points after a teacher rejects a question as abuse
                 "other",
             ],
             default: "other",
@@ -40,7 +41,7 @@ const PointSchema = new mongoose.Schema(
         related_entity: {
             entity_type: {
                 type: String,
-                enum: ["Question", "Test", "TestAttempt", "ForumQuestion", "Project"],
+                enum: ["Question", "Test", "TestAttempt", "ForumQuestion", "Project", "Module"],
             },
             entity_id: {
                 type: mongoose.Schema.Types.ObjectId,
